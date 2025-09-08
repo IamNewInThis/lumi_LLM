@@ -64,17 +64,20 @@ docker-compose down
 
 ```bash
 # Construir la imagen
-docker build -t lumi-llm .
+sudo docker build -t lumi-llm .
 
 # Ejecutar el contenedor
-docker run -p 8000:8000 --env-file .env lumi-llm
+sudo docker run -d -p 8000:8000 --env-file .env --name lumi-api lumi-llm
 
-# Ejecutar en segundo plano
-docker run -d -p 8000:8000 --env-file .env --name lumi-container lumi-llm
+# Reiniciar el contenedor
+sudo docker restart lumi-api
 
 # Detener el contenedor
-docker stop lumi-container
-docker rm lumi-container
+sudo docker stop lumi-api
+docker rm lumi-api
+
+# Ver contenedores en ejecución
+sudo docker ps
 ```
 
 ## 🌐 Uso de la API

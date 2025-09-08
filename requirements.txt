@@ -80,6 +80,9 @@ typing-inspection==0.4.1
 typing_extensions==4.14.1
 tzdata==2025.2
 urllib3==2.5.0
+supabase==2.18.1
+supabase_auth==2.12.3
+supabase_functions==0.10.1
 uvicorn==0.35.0
 watchdog==6.0.0
 wheel==0.45.1

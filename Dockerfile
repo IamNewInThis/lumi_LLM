@@ -5,6 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # define el directorio de trabajo dentro del contenedor
 WORKDIR /src
+COPY . /src
 
 # dependencias del sistema
 RUN apt-get update && apt-get install -y build-essential curl && rm -rf /var/lib/apt/lists/*
@@ -23,4 +24,4 @@ RUN useradd -m appuser && chown -R appuser /src
 USER appuser
 
 # Para desarrollo local usamos puerto 8000, para producción usar variable PORT
-CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000} --reload"]
