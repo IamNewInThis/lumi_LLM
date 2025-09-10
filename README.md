@@ -154,12 +154,19 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 lumi_LLM/
 ├── src/
-│   └── main.py              # Aplicación FastAPI
-├── docker-compose.yml       # Configuración Docker Compose
-├── Dockerfile              # Imagen Docker
-├── requirements.txt        # Dependencias Python
-├── .env                   # Variables de entorno (crear)
-└── README.md              # Este archivo
+│   ├── auth.py
+│   ├── main.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── chat.py
+│   └── routes/
+│       ├── __init__.py
+│       └── chat.py
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+├── README.md
+└── .env  # (crear)
 ```
 
 ## 🚨 Solución de Problemas
