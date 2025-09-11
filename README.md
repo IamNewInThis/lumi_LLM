@@ -1,11 +1,10 @@
 # Lumi LLM - API de Chat con OpenAI y Perplexity
 
-Una API REST construida con FastAPI que proporciona endpoints para interactuar con modelos de IA de OpenAI y Perplexity, especializada en consultas de crianza.
+Una API REST construida con FastAPI que proporciona endpoints para interactuar con modelos de IA de OpenAI, especializada en consultas de crianza.
 
 ## 🚀 Características
 
 - **OpenAI Integration**: Endpoint `/api/chat` para consultas con GPT-4o
-- **Perplexity Integration**: Endpoint `/api/chat/pplx` para respuestas breves con Sonar
 - **CORS habilitado** para desarrollo
 - **Dockerizado** para fácil despliegue
 - **Variables de entorno** configurables
@@ -14,13 +13,12 @@ Una API REST construida con FastAPI que proporciona endpoints para interactuar c
 
 - Docker y Docker Compose instalados
 - Cuenta de OpenAI con API key
-- (Opcional) Cuenta de Perplexity con API key
 
 ## 🛠️ Configuración
 
 ### 1. Clonar el repositorio
 ```bash
-git clone <tu-repositorio>
+git clone https://github.com/IamNewInThis/lumi_LLM.git
 cd lumi_LLM
 ```
 
@@ -35,9 +33,8 @@ PORT=8000
 OPENAI_API_KEY=tu_openai_api_key_aqui
 OPENAI_MODEL=gpt-4o
 
-# Perplexity Configuration (opcional)
-PPLX_API_KEY=tu_pplx_api_key_aqui
-PPLX_MODEL=sonar
+SUPABASE_URL=supabase_url
+SUPABASE_SERVICE_ROLE_KEY=supabase_service_role_key
 ```
 
 **⚠️ Importante**: Reemplaza `tu_openai_api_key_aqui` con tu clave real de OpenAI.
@@ -67,10 +64,11 @@ docker-compose down
 sudo docker build -t lumi-llm .
 
 # Ejecutar el contenedor
-sudo docker run -d -p 8000:8000 --env-file .env --name lumi-api lumi-llm
+sudo docker run -t lumi-llm
+docker compose up
 
 # Reiniciar el contenedor
-sudo docker restart lumi-api
+sudo docker restart -t lumi-llm 
 
 # Detener el contenedor
 sudo docker stop lumi-api
@@ -100,19 +98,6 @@ Content-Type: application/json
   "profile": {
     "edad_hijo": "3 años",
     "problema": "dificultad para dormir"
-  }
-}
-```
-
-#### 2. Chat con Perplexity (respuestas breves)
-```bash
-POST /api/chat/pplx
-Content-Type: application/json
-
-{
-  "message": "¿Cuántas horas debe dormir un niño de 2 años?",
-  "profile": {
-    "edad_hijo": "2 años"
   }
 }
 ```
