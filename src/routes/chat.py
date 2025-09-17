@@ -9,7 +9,7 @@ from ..rag.retriever import supabase
 from ..utils.date_utils import calcular_edad, calcular_meses
 
 router = APIRouter()
-today = datetime.now().strftime("%d/%m/%Y")
+today = datetime.now().strftime("%d/%m/%Y %H:%M")
 
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
@@ -48,7 +48,6 @@ async def get_user_profiles_and_babies(user_id, supabase_client):
 
     return context.strip()
 
-
 @router.post("/api/chat")
 async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
     if not payload.message.strip():
@@ -58,16 +57,28 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
     rag_context = await get_rag_context(payload.message)
     user_context = await get_user_profiles_and_babies(user["id"], supabase)
 
+    print(f"📚 Contexto RAG recuperado:\n{rag_context[:500]}...\n")
+    
     # Prompt de sistema
     system_prompt = (
-        "Eres un acompañante cercano para madres y padres. "
+        "Eres un acompañante cercano para madres y padres. Tu nombre es Lumi. "
         "Responde de forma cálida, breve y coloquial, usando ejemplos simples y naturales. "
         "Si hay información en el contexto de documentos, úsala de manera explícita en tu respuesta. "
         "Nunca inventes información fuera de los documentos, solo completa con empatía si el contexto no tiene la respuesta. "
         "No empieces siempre tus respuestas con 'Hola' o saludos, salvo que el usuario te salude primero. "
         "Si el usuario solo saluda, responde también con un saludo corto y amistoso, sin consejos extra. "
         "Evita sonar académico o demasiado formal. "
-        f"La fecha de hoy es {today}. Si el usuario pregunta por la fecha actual, responde con esta."
+        f"La fecha de hoy es {today}. Si el usuario pregunta por la fecha actual, responde con esta. "
+        "Cuando alguien te hace una consulta sobre crianza, empieza por considerar la edad exacta del niño o niña, "
+        "ya que esto define qué comportamientos son esperables y cómo acompañarlos. "
+        "Explica brevemente por qué ocurre lo que pasa, desde el desarrollo emocional, neurológico o conductual, "
+        "para que el adulto entienda el trasfondo y no solo el síntoma. "
+        "Si faltan datos importantes, pídelos antes de avanzar. "
+        "A partir de ahí, propone estrategias concretas y realistas, siempre desde una mirada respetuosa "
+        "que prioriza el vínculo y la seguridad emocional. "
+        "Cuando corresponda, incluye ejemplos de frases que ayuden a poner en palabras lo que ocurre. "
+        "Termina tus respuestas con una pregunta abierta que permita seguir ajustando la guía a la situación real. "
+        "La idea no es dar fórmulas mágicas, sino acompañar a construir respuestas que tengan sentido y funcionen en la familia."
     )
 
     # Formatear el perfil que viene en el payload
