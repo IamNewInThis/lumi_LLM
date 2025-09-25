@@ -14,10 +14,6 @@ today = datetime.now().strftime("%d/%m/%Y %H:%M")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
-if not OPENAI_KEY:
-    raise RuntimeError("Falta OPENAI_API_KEY en variables de entorno (.env)")
-
-
 async def get_user_profiles_and_babies(user_id, supabase_client):
     profiles = supabase_client.table("profiles").select("*").eq("id", user_id).execute()
     babies = supabase_client.table("babies").select("*").eq("user_id", user_id).execute()
@@ -28,10 +24,13 @@ async def get_user_profiles_and_babies(user_id, supabase_client):
     ] if profiles.data else []
 
     baby_texts = []
+    routines_context = ""
     if babies.data:
         for b in babies.data:
             edad_anios = calcular_edad(b["birthdate"])
             edad_meses = calcular_meses(b["birthdate"])
+            rutina = b.get("routines")
+
             baby_texts.append(
                 f"- Bebé: {b['name']}, fecha de nacimiento {b['birthdate']}, "
                 f"edad: {edad_anios} años ({edad_meses} meses aprox.), "
@@ -40,22 +39,69 @@ async def get_user_profiles_and_babies(user_id, supabase_client):
                 f"altura: {b.get('height', 'N/A')} cm"
             ) 
 
+            # Si no hay rutina, sugerir crear una pidiendo detalles
+            if not rutina:
+                routines_context += (
+                    f"⚠️ El bebé {b['name']} no tiene rutina registrada. "
+                    "Si el usuario pide crear una rutina, primero pregúntale qué actividades y horarios quiere incluir. "
+                    "Luego organiza la rutina en formato tabla con columnas: Hora | Actividad | Detalles.\n\n"
+                )
+            else:
+                routines_context += (
+                    f"✅ El bebé {b['name']} ya tiene una rutina registrada. "
+                    "Si el usuario pide modificarla o revisarla, muéstrala en formato tabla y sugiere mejoras.\n\n"
+                )
+
     context = ""
     if profile_texts:
         context += "Perfiles:\n" + "\n".join(profile_texts) + "\n\n"
     if baby_texts:
-        context += "Bebés:\n" + "\n".join(baby_texts)
+        context += "Bebés:\n" + "\n".join(baby_texts) + "\n\n"
 
-    return context.strip()
+    return context.strip(), routines_context.strip()
+
+async def get_conversation_history(user_id, supabase_client, limit_per_role=5):
+    """
+    Recupera los últimos mensajes del usuario y del asistente para mantener contexto en la conversación.
+    """
+    user_msgs = supabase_client.table("conversations") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .eq("role", "user") \
+        .order("created_at", desc=True) \
+        .limit(limit_per_role) \
+        .execute()
+
+    assistant_msgs = supabase_client.table("conversations") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .eq("role", "assistant") \
+        .order("created_at", desc=True) \
+        .limit(limit_per_role) \
+        .execute()
+
+    # Combinar y ordenar cronológicamente
+    history = (user_msgs.data or []) + (assistant_msgs.data or [])
+    history_sorted = sorted(history, key=lambda x: x["created_at"])
+
+    # Convertir al formato que espera OpenAI
+    formatted_history = [
+        {"role": msg["role"], "content": msg["content"]}
+        for msg in history_sorted
+    ]
+
+    return formatted_history
 
 @router.post("/api/chat")
 async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="message required")
 
-    # Contexto RAG y perfiles/bebés
+    # Contexto RAG, perfiles/bebés e historial de conversación
     rag_context = await get_rag_context(payload.message)
-    user_context = await get_user_profiles_and_babies(user["id"], supabase)
+    user_context, routines_context = await get_user_profiles_and_babies(user["id"], supabase)
+    history = await get_conversation_history(user["id"], supabase)  # 👈 historial del backend
+
 
     print(f"📚 Contexto RAG recuperado:\n{rag_context[:500]}...\n")
     
@@ -81,6 +127,7 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
         "La idea no es dar fórmulas mágicas, sino acompañar a construir respuestas que tengan sentido y funcionen en la familia."
     )
 
+
     # Formatear el perfil que viene en el payload
     profile_text = ""
     if payload.profile:
@@ -98,10 +145,12 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
             {"role": "system", "content": system_prompt},
             {"role": "system", "content": f"Contexto de usuario:\n{user_context}"},
             {"role": "system", "content": f"Contexto del perfil enviado:\n{profile_text}"},
+            {"role": "system", "content": f"Contexto de rutinas:\n{routines_context}"},
             {"role": "system", "content": f"Usa estrictamente la siguiente información del libro si es relevante:\n\n{rag_context}"},
+            *history,  
             {"role": "user", "content": payload.message},
         ],
-        "max_tokens": 500,
+        "max_tokens": 1000,
         "temperature": 0.3,
     }
 
