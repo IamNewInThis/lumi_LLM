@@ -1,42 +1,71 @@
 from .retriever import vs
 from collections import defaultdict
 
-async def get_rag_context(query: str, k: int = 15, top_sources: int = 2) -> str:
+# Consultar hasta 3 documentos para contexto
+async def get_rag_context(query: str, k: int = 20, top_sources: int = 3) -> str:
     """
     Recupera contexto del RAG combinando los documentos más relevantes.
-    Usa la similitud devuelta por Supabase para elegir los documentos dominantes.
+    Usa una estrategia híbrida para asegurar cobertura de documentos relevantes.
     """
 
-    # Paso 1: búsqueda global con similitud
+    # Paso 1: búsqueda global más amplia
     results = vs.similarity_search(query, k=k)
     if not results:
         return ""
 
-    scores = defaultdict(list)
-
+    # Contar ocurrencias por fuente
+    source_counts = defaultdict(int)
     for d in results:
         src = d.metadata.get("source", "unknown")
-        sim = d.metadata.get("similarity", None)  # si tu integración añade similarity en metadata
-        if sim is not None:
-            scores[src].append(float(sim))
+        source_counts[src] += 1
 
-    # Calcular similitud promedio por source
-    avg_scores = {src: sum(vals)/len(vals) for src, vals in scores.items()} if scores else {}
-
-    # Si no hay similarity en metadata, fallback: contar ocurrencias
-    if not avg_scores:
-        for d in results:
-            src = d.metadata.get("source", "unknown")
-            scores[src].append(1)
-        avg_scores = {src: sum(vals)/len(vals) for src, vals in scores.items()}
-
-    # Elegir top fuentes
-    best_sources = sorted(avg_scores, key=avg_scores.get, reverse=True)[:top_sources]
-    print(f"🎯 Documentos dominantes detectados: {best_sources}")
-
-    # Paso 2: búsqueda refinada en esas fuentes
-    combined = []
+    # Elegir top fuentes basado en frecuencia
+    best_sources = sorted(source_counts, key=source_counts.get, reverse=True)[:top_sources]
+    
+    # Paso 2: Búsqueda específica por palabras clave para asegurar cobertura
+    keyword_sources = []
+    
+    # Mapeo de palabras clave a documentos específicos
+    keyword_mapping = {
+        'disciplina': ['disciplina_sin_lagrimas.pdf', 'limites.pdf'],
+        'límites': ['limites.pdf', 'libertad.pdf'],
+        'castigos': ['disciplina_sin_lagrimas.pdf'],
+        'rabietas': ['disciplina_sin_lagrimas.pdf'],
+        'sobreestimulacion': ['simplicity_parenting.pdf'],
+        'actividades': ['simplicity_parenting.pdf'],
+        'exceso': ['simplicity_parenting.pdf'],
+        'rutina': ['rutina_del_bebe.pdf'],
+        'sueño': ['rutina_del_bebe.pdf'],
+        'alimentación': ['child_of_mine_feeding.pdf'],
+        'comida': ['child_of_mine_feeding.pdf'],
+        'emociones': ['emociones.pdf'],
+        'crianza respetuosa': ['emociones.pdf', 'libertad.pdf'],
+        'respetuosa': ['emociones.pdf', 'libertad.pdf'],
+    }
+    
+    query_lower = query.lower()
+    for keyword, sources in keyword_mapping.items():
+        if keyword in query_lower:
+            keyword_sources.extend(sources)
+    
+    # Combinar fuentes: priorizar keywords, luego frecuencia
+    final_sources = []
+    
+    # Primero agregar fuentes de keywords (alta prioridad)
+    for src in keyword_sources:
+        if src not in final_sources:
+            final_sources.append(src)
+    
+    # Luego agregar fuentes por frecuencia hasta completar top_sources
     for src in best_sources:
+        if src not in final_sources and len(final_sources) < top_sources:
+            final_sources.append(src)
+    
+    print(f"🎯 Documentos dominantes detectados: {final_sources}")
+
+    # Paso 3: búsqueda refinada en esas fuentes
+    combined = []
+    for src in final_sources:
         filtered = vs.similarity_search(query, k=5, filter={"source": src})
         combined.extend(filtered)
 

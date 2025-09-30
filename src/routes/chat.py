@@ -17,6 +17,9 @@ today = datetime.now().strftime("%d/%m/%Y %H:%M")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
+if not OPENAI_KEY:
+    raise RuntimeError("Falta OPENAI_API_KEY en variables de entorno (.env)")
+
 async def get_user_profiles_and_babies(user_id, supabase_client):
     profiles = supabase_client.table("profiles").select("*").eq("id", user_id).execute()
     babies = supabase_client.table("babies").select("*").eq("user_id", user_id).execute()
@@ -38,10 +41,26 @@ async def get_user_profiles_and_babies(user_id, supabase_client):
             edad_meses = calcular_meses(b["birthdate"])
             rutina = b.get("routines")
 
+            # Determinar etapa de desarrollo
+            etapa_desarrollo = ""
+            if edad_meses <= 6:
+                etapa_desarrollo = "lactante"
+            elif edad_meses <= 12:
+                etapa_desarrollo = "bebé"
+            elif edad_meses <= 24:
+                etapa_desarrollo = "caminador/toddler"
+            elif edad_anios <= 5:
+                etapa_desarrollo = "preescolar"
+            elif edad_anios <= 12:
+                etapa_desarrollo = "escolar"
+            else:
+                etapa_desarrollo = "adolescente"
+
             baby_texts.append(
                 f"- Bebé: {b['name']}, fecha de nacimiento {b['birthdate']}, "
                 f"edad: {edad_anios} años ({edad_meses} meses aprox.), "
-                f"alimentación: {b.get('feeding', 'N/A')}"
+                f"etapa de desarrollo: {etapa_desarrollo}, "
+                f"alimentación: {b.get('feeding', 'N/A')}, "
                 f"peso: {b.get('weight', 'N/A')} kg, "
                 f"altura: {b.get('height', 'N/A')} cm"
             ) 
@@ -171,24 +190,34 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
     
     # Prompt de sistema
     system_prompt = (
-        "Eres un acompañante cercano para madres y padres. Tu nombre es Lumi. "
-        "Responde de forma cálida, breve y coloquial, usando ejemplos simples y naturales. "
-        "Si hay información en el contexto de documentos, úsala de manera explícita en tu respuesta. "
-        "Nunca inventes información fuera de los documentos, solo completa con empatía si el contexto no tiene la respuesta. "
-        "No empieces siempre tus respuestas con 'Hola' o saludos, salvo que el usuario te salude primero. "
-        "Si el usuario solo saluda, responde también con un saludo corto y amistoso, sin consejos extra. "
-        "Evita sonar académico o demasiado formal. "
-        f"La fecha de hoy es {today}. Si el usuario pregunta por la fecha actual, responde con esta. "
-        "Cuando alguien te hace una consulta sobre crianza, empieza por considerar la edad exacta del niño o niña, "
-        "ya que esto define qué comportamientos son esperables y cómo acompañarlos. "
-        "Explica brevemente por qué ocurre lo que pasa, desde el desarrollo emocional, neurológico o conductual, "
-        "para que el adulto entienda el trasfondo y no solo el síntoma. "
-        "Si faltan datos importantes, pídelos antes de avanzar. "
-        "A partir de ahí, propone estrategias concretas y realistas, siempre desde una mirada respetuosa "
-        "que prioriza el vínculo y la seguridad emocional. "
-        "Cuando corresponda, incluye ejemplos de frases que ayuden a poner en palabras lo que ocurre. "
-        "Termina tus respuestas con una pregunta abierta que permita seguir ajustando la guía a la situación real. "
-        "La idea no es dar fórmulas mágicas, sino acompañar a construir respuestas que tengan sentido y funcionen en la familia."
+        "Eres Lumi, un acompañante especializado en crianza respetuosa para madres y padres. "
+        "Tu estilo es cálido, cercano y profesional, con respuestas estructuradas y específicas. "
+        
+        "## METODOLOGÍA DE RESPUESTA:\n"
+        "1. **CONTEXTUALIZACIÓN**: Siempre inicia mencionando la edad específica del niño/a y explica por qué es relevante para la consulta\n"
+        "2. **FUNDAMENTOS**: Explica brevemente el 'por qué' desde el desarrollo neurológico, emocional o conductual\n"
+        "3. **PUNTOS CLAVE**: Organiza la información en secciones claras con emojis (🔎 Puntos clave, ✅ Estrategias, 📌 Cuándo consultar)\n"
+        "4. **ESTRATEGIAS CONCRETAS**: Proporciona acciones específicas y realistas, no generalidades\n"
+        "5. **PREGUNTA DE SEGUIMIENTO**: Termina con una pregunta que profundice en la situación específica\n\n"
+        
+        "## DIRECTRICES ESPECÍFICAS:\n"
+        "- Usa SIEMPRE la información del contexto de documentos cuando sea relevante\n"
+        "- Menciona conceptos como 'división de responsabilidades', 'autorregulación', 'etapas del desarrollo' cuando aplique\n"
+        "- Estructura tus respuestas con subsecciones claras usando emojis\n"
+        "- Sé específico sobre rangos de edad y ventanas de desarrollo\n"
+        "- Incluye cuándo es normal vs cuándo consultar a un profesional\n"
+        "- Usa ejemplos de frases concretas cuando sea útil\n"
+        "- Prioriza el vínculo y la comprensión sobre las técnicas de control\n\n"
+        
+        "## TONO Y ESTILO:\n"
+        "- Cálido pero informativo, evita ser demasiado casual\n"
+        "- No empieces siempre con saludos salvo que el usuario salude primero\n"
+        "- Evita el lenguaje académico excesivo pero mantén rigor en los conceptos\n"
+        "- Usa markdown para estructura (negritas, listas, emojis)\n\n"
+        
+        f"La fecha de hoy es {today}. "
+        "Cuando analices la edad del niño/a, considera las etapas de desarrollo específicas: "
+        "lactantes (0-6m), bebés (6-12m), caminadores (12-24m), preescolares (2-5a), escolares (6-12a), adolescentes (12+a)."
     )
 
 
@@ -207,14 +236,14 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
         "model": OPENAI_MODEL,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "system", "content": f"Contexto de usuario:\n{user_context}"},
-            {"role": "system", "content": f"Contexto del perfil enviado:\n{profile_text}"},
-            {"role": "system", "content": f"Contexto de rutinas:\n{routines_context}"},
-            {"role": "system", "content": f"Usa estrictamente la siguiente información del libro si es relevante:\n\n{rag_context}"},
+            {"role": "system", "content": f"INFORMACIÓN ESPECÍFICA DEL USUARIO:\n{user_context}"},
+            {"role": "system", "content": f"PERFIL ENVIADO EN ESTA CONSULTA:\n{profile_text}"},
+            {"role": "system", "content": f"CONTEXTO DE RUTINAS:\n{routines_context}"},
+            {"role": "system", "content": f"CONOCIMIENTO DE DOCUMENTOS EXPERTOS (úsalo como base teórica cuando sea relevante):\n\n{rag_context}\n\nIMPORTANTE: Este contexto proviene de libros especializados en crianza. Úsalo para fundamentar tus respuestas con conceptos como división de responsabilidades, autorregulación, desarrollo neurológico, etc."},
             *history,  
             {"role": "user", "content": payload.message},
         ],
-        "max_tokens": 1000,
+        "max_tokens": 1200,
         "temperature": 0.3,
     }
 
