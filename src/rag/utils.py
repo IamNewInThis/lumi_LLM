@@ -61,7 +61,7 @@ async def get_rag_context(query: str, k: int = 20, top_sources: int = 3) -> str:
         if src not in final_sources and len(final_sources) < top_sources:
             final_sources.append(src)
     
-    print(f"🎯 Documentos dominantes detectados: {final_sources}")
+    #print(f"🎯 Documentos dominantes detectados: {final_sources}")
 
     # Paso 3: búsqueda refinada en esas fuentes
     combined = []

@@ -10,6 +10,9 @@ from ..utils.date_utils import calcular_edad, calcular_meses
 from ..utils.knowledge_detector import KnowledgeDetector
 from ..services.knowledge_service import BabyKnowledgeService
 from ..utils.knowledge_cache import confirmation_cache
+from ..utils.routine_detector import RoutineDetector
+from ..services.routine_service import RoutineService
+from ..utils.routine_cache import routine_confirmation_cache
 
 router = APIRouter()
 today = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -27,6 +30,10 @@ async def get_user_profiles_and_babies(user_id, supabase_client):
     # Obtener conocimiento específico de todos los bebés
     knowledge_by_baby = await BabyKnowledgeService.get_all_user_knowledge(user_id)
     knowledge_context = BabyKnowledgeService.format_knowledge_for_context(knowledge_by_baby)
+    
+    # Obtener rutinas de todos los bebés
+    routines_by_baby = await RoutineService.get_all_user_routines(user_id)
+    routines_context = RoutineService.format_routines_for_context(routines_by_baby)
 
     profile_texts = [
         f"- Perfil: {p['name']}, fecha de nacimiento {p['birthdate']}, alimentación: {p.get('feeding', 'N/A')}"
@@ -34,12 +41,10 @@ async def get_user_profiles_and_babies(user_id, supabase_client):
     ] if profiles.data else []
 
     baby_texts = []
-    routines_context = ""
     if babies.data:
         for b in babies.data:
             edad_anios = calcular_edad(b["birthdate"])
             edad_meses = calcular_meses(b["birthdate"])
-            rutina = b.get("routines")
 
             # Determinar etapa de desarrollo
             etapa_desarrollo = ""
@@ -63,20 +68,7 @@ async def get_user_profiles_and_babies(user_id, supabase_client):
                 f"alimentación: {b.get('feeding', 'N/A')}, "
                 f"peso: {b.get('weight', 'N/A')} kg, "
                 f"altura: {b.get('height', 'N/A')} cm"
-            ) 
-
-            # Si no hay rutina, sugerir crear una pidiendo detalles
-            if not rutina:
-                routines_context += (
-                    f"⚠️ El bebé {b['name']} no tiene rutina registrada. "
-                    "Si el usuario pide crear una rutina, primero pregúntale qué actividades y horarios quiere incluir. "
-                    "Luego organiza la rutina en formato tabla con columnas: Hora | Actividad | Detalles.\n\n"
-                )
-            else:
-                routines_context += (
-                    f"✅ El bebé {b['name']} ya tiene una rutina registrada. "
-                    "Si el usuario pide modificarla o revisarla, muéstrala en formato tabla y sugiere mejoras.\n\n"
-                )
+            )
 
     context = ""
     if profile_texts:
@@ -129,10 +121,10 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
 
     user_id = user["id"]
     
-    # 🔥 NUEVO: Verificar primero si es una respuesta de confirmación
+    # Verificar si es una respuesta de confirmación de preferencias (KNOWLEDGE)
     confirmation_response = confirmation_cache.is_confirmation_response(payload.message)
     if confirmation_response is not None and confirmation_cache.has_pending_confirmation(user_id):
-        print(f"🎯 Detectada respuesta de confirmación: {confirmation_response}")
+        print(f"🎯 Detectada respuesta de confirmación de conocimiento: {confirmation_response}")
         
         pending_data = confirmation_cache.get_pending_confirmation(user_id)
         if pending_data:
@@ -180,46 +172,216 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
                 confirmation_cache.clear_pending_confirmation(user_id)
                 return {"answer": "👌 Entendido, no guardaré esa información.", "usage": {}}
 
+    # Verificar si es una respuesta de confirmación de RUTINA
+    routine_confirmation_response = routine_confirmation_cache.is_confirmation_response(payload.message)
+    if routine_confirmation_response is not None and routine_confirmation_cache.has_pending_confirmation(user_id):
+        print(f"🎯 Detectada respuesta de confirmación de rutina: {routine_confirmation_response}")
+        
+        pending_routine_data = routine_confirmation_cache.get_pending_confirmation(user_id)
+        if pending_routine_data:
+            if routine_confirmation_response:  # Usuario confirmó la rutina
+                try:
+                    routine_data = pending_routine_data["routine"]
+                    
+                    # Buscar el baby_id basado en el nombre
+                    baby_id = await RoutineService.find_baby_by_name(
+                        user_id, 
+                        routine_data.get("baby_name", "")
+                    )
+                    
+                    if baby_id:
+                        # 1. GUARDAR LA RUTINA en tablas específicas
+                        saved_routine = await RoutineService.save_routine(
+                            user_id, 
+                            baby_id, 
+                            routine_data
+                        )
+                        
+                        # 2. TAMBIÉN GUARDAR COMO CONOCIMIENTO GENERAL
+                        try:
+                            routine_name = routine_data.get("routine_name", "Rutina")
+                            routine_summary = routine_data.get("context_summary", "Rutina establecida")
+                            
+                            # Crear entrada de conocimiento basada en la rutina
+                            knowledge_data = {
+                                "category": "rutinas",
+                                "subcategory": "estructura diaria",
+                                "title": routine_name,
+                                "description": routine_summary,
+                                "importance_level": 3
+                            }
+                            
+                            # Guardar también en baby_knowledge
+                            await BabyKnowledgeService.save_knowledge(
+                                user_id, 
+                                baby_id, 
+                                knowledge_data
+                            )
+                            
+                            print(f"✅ Rutina guardada en AMBOS sistemas: rutinas + conocimiento")
+                            
+                        except Exception as knowledge_error:
+                            print(f"⚠️ Error guardando conocimiento de rutina: {knowledge_error}")
+                            # No fallar si el conocimiento falla, la rutina ya se guardó
+                        
+                        routine_confirmation_cache.clear_pending_confirmation(user_id)
+                        
+                        activities_count = saved_routine.get("activities_count", 0)
+                        
+                        response_text = f"✅ ¡Excelente! He guardado la rutina **{routine_name}** con {activities_count} actividades en el sistema de rutinas y también como conocimiento general. Ahora podré ayudarte mejor con horarios y sugerencias personalizadas."
+                        
+                        return {"answer": response_text, "usage": {}}
+                    else:
+                        routine_confirmation_cache.clear_pending_confirmation(user_id)
+                        return {"answer": "❌ No pude encontrar el bebé mencionado. Por favor intenta de nuevo.", "usage": {}}
+                        
+                except Exception as e:
+                    print(f"Error guardando rutina confirmada: {e}")
+                    routine_confirmation_cache.clear_pending_confirmation(user_id)
+                    return {"answer": "❌ Hubo un error guardando la rutina. Por favor intenta de nuevo.", "usage": {}}
+                    
+            else:  # Usuario rechazó la rutina
+                routine_confirmation_cache.clear_pending_confirmation(user_id)
+                return {"answer": "👌 Entendido, no guardaré esa rutina.", "usage": {}}
+
     # Contexto RAG, perfiles/bebés e historial de conversación
     rag_context = await get_rag_context(payload.message)
     user_context, routines_context = await get_user_profiles_and_babies(user["id"], supabase)
     history = await get_conversation_history(user["id"], supabase)  # 👈 historial del backend
 
-
-    print(f"📚 Contexto RAG recuperado:\n{rag_context[:500]}...\n")
+    #print(f"📚 Contexto RAG recuperado:\n{rag_context[:500]}...\n")
     
     # Prompt de sistema
     system_prompt = (
-        "Eres Lumi, un acompañante especializado en crianza respetuosa para madres y padres. "
-        "Tu estilo es cálido, cercano y profesional, con respuestas estructuradas y específicas. "
+        "You are Lumi, a specialized companion in respectful parenting for mothers and fathers. "
+        "Your style is warm, close and professional, with structured and specific responses. "
+        "You can communicate fluently in English, Spanish, and Portuguese - always respond in the same language the user writes to you.\n\n"
         
-        "## METODOLOGÍA DE RESPUESTA:\n"
-        "1. **CONTEXTUALIZACIÓN**: Siempre inicia mencionando la edad específica del niño/a y explica por qué es relevante para la consulta\n"
-        "2. **FUNDAMENTOS**: Explica brevemente el 'por qué' desde el desarrollo neurológico, emocional o conductual\n"
-        "3. **PUNTOS CLAVE**: Organiza la información en secciones claras con emojis (🔎 Puntos clave, ✅ Estrategias, 📌 Cuándo consultar)\n"
-        "4. **ESTRATEGIAS CONCRETAS**: Proporciona acciones específicas y realistas, no generalidades\n"
-        "5. **PREGUNTA DE SEGUIMIENTO**: Termina con una pregunta que profundice en la situación específica\n\n"
+        "## RESPONSE METHODOLOGY:\n"
+        "**ADAPT YOUR RESPONSE LENGTH TO THE QUESTION:**\n"
+        "- For SIMPLE/DIRECT questions (yes/no, basic facts, quick confirmations): Give concise, direct answers (1-3 sentences)\n"
+        "- For COMPLEX topics (detailed guidance, new concepts, problem-solving): Use full structured format below\n\n"
         
-        "## DIRECTRICES ESPECÍFICAS:\n"
-        "- Usa SIEMPRE la información del contexto de documentos cuando sea relevante\n"
-        "- Menciona conceptos como 'división de responsabilidades', 'autorregulación', 'etapas del desarrollo' cuando aplique\n"
-        "- Estructura tus respuestas con subsecciones claras usando emojis\n"
-        "- Sé específico sobre rangos de edad y ventanas de desarrollo\n"
-        "- Incluye cuándo es normal vs cuándo consultar a un profesional\n"
-        "- Usa ejemplos de frases concretas cuando sea útil\n"
-        "- Prioriza el vínculo y la comprensión sobre las técnicas de control\n\n"
+        "**FOR COMPLEX RESPONSES ONLY:**\n"
+        "1. **CONTEXTUALIZATION**: Start by mentioning the specific age of the child and explain why it's relevant\n"
+        "2. **FUNDAMENTALS**: Briefly explain the 'why' from neurological, emotional, or behavioral development\n"
+        "3. **KEY POINTS**: Organize information in clear sections with emojis (🔎 Key points, ✅ Strategies, 📌 When to consult)\n"
+        "4. **CONCRETE STRATEGIES**: Provide specific and realistic actions, not generalities\n"
+        "5. **FOLLOW-UP QUESTION**: End with a question that deepens the specific situation\n\n"
         
-        "## TONO Y ESTILO:\n"
-        "- Cálido pero informativo, evita ser demasiado casual\n"
-        "- No empieces siempre con saludos salvo que el usuario salude primero\n"
-        "- Evita el lenguaje académico excesivo pero mantén rigor en los conceptos\n"
-        "- Usa markdown para estructura (negritas, listas, emojis)\n\n"
+        "## SPECIFIC GUIDELINES:\n"
+        "- ALWAYS use information from document context when relevant\n"
+        "- For simple yes/no questions, give direct answers without excessive structure\n"
+        "- For follow-up questions on the same topic, be more concise\n"
+        "- Use structured format only when the question requires detailed explanation\n"
+        "- Mention concepts like 'division of responsibilities', 'self-regulation', 'development stages' when applicable\n"
+        "- Be specific about age ranges and developmental windows when needed\n"
+        "- Include when it's normal vs when to consult a professional only for health concerns\n"
+        "- Prioritize bonding and understanding over control techniques\n\n"
         
-        f"La fecha de hoy es {today}. "
-        "Cuando analices la edad del niño/a, considera las etapas de desarrollo específicas: "
-        "lactantes (0-6m), bebés (6-12m), caminadores (12-24m), preescolares (2-5a), escolares (6-12a), adolescentes (12+a)."
+        "## SPECIAL FORMAT FOR ROUTINES:\n"
+        "- When the user asks about routines or schedules, ALWAYS provide information in markdown table format\n"
+        "- Use this exact format: | Time | Activity | Details |\n"
+        "- Include specific times in HH:MM format or HH:MM-HH:MM ranges\n"
+        "- Be specific in the details of each activity\n"
+        "- Example of correct format:\n"
+        "  | 15:00-15:20 | Mathematics | Addition and subtraction exercises |\n"
+        "  | 15:20-15:25 | Break | Stretch and drink water |\n\n"
+        
+        "## MULTILINGUAL SUPPORT:\n"
+        "- 🇺🇸 ENGLISH: Respond in English when user writes in English\n"
+        "- 🇪🇸 ESPAÑOL: Responde en español cuando el usuario escriba en español\n"
+        "- 🇧🇷 PORTUGUÊS: Responda em português quando o usuário escrever em português\n"
+        "- Always match the user's language exactly\n"
+        "- Maintain the same warm, professional tone in all languages\n\n"
+        
+        "## RESPONSE LENGTH EXAMPLES:\n"
+        "- 'Is this weight normal?' → 'Yes, 20kg at 110cm for a 6-year-old is generally within normal range.'\n"
+        "- 'How do I handle tantrums?' → Use full structured format with strategies and explanations\n"
+        "- 'What time should bedtime be?' → Brief answer with age-appropriate time\n"
+        "- 'My child won't eat vegetables' → Use structured format with detailed strategies\n\n"
+        
+        "## TONE AND STYLE:\n"
+        "- Warm but informative, avoid being too casual\n"
+        "- Don't always start with greetings unless the user greets first\n"
+        "- Match formality level to the question complexity\n"
+        "- Use markdown for structure only when needed\n"
+        "- Be direct and helpful, not overly academic\n\n"
+        
+        f"Today's date is {today}. "
+        "When analyzing the child's age, consider specific developmental stages: "
+        "infants (0-6m), babies (6-12m), toddlers (12-24m), preschoolers (2-5y), school-age (6-12y), adolescents (12+y).\n\n"
+        
+        "## TABLA DE REFERENCIA DE SUEÑO INFANTIL:\n"
+        "Usa esta tabla como referencia para todas las consultas sobre patrones de sueño, siestas y horarios de descanso:\n\n"
+        "| Edad | Ventana de sueño (horas despierto) | Nº de siestas | Límite por siesta | Sueño nocturno | Sueño diurno | Total aprox. |\n"
+        "|------|-----------------------------------|---------------|-------------------|----------------|--------------|-------------|\n"
+        "| 0–1 mes | 40 min – 1 h | 4–5 | hasta 3 h | 8–9 h | 8 h | 16–17 h |\n"
+        "| 2 meses | 1 h – 1,5 h | 4–5 | hasta 2h30 | 9–10 h | 5–6 h | 14–16 h |\n"
+        "| 3 meses | 1,5 h – 2 h | 4 | hasta 2 h | 10–11 h | 4–5 h | 14–16 h |\n"
+        "| 4–6 meses | 2 h – 2,5 h | 3 | hasta 1h30 | 11 h | 3–4 h | 14–15 h |\n"
+        "| 7–8 meses | 2,5 h – 3 h | 3 | hasta 1h30 | 11 h | 3 h | 14 h |\n"
+        "| 9–12 meses | 3 h – 4 h | 2 | 1–2 h | 11 h | 2–3 h | 13–14 h |\n"
+        "| 13–15 meses | 3 h – 4 h | 2 | 1–2 h | 11 h | 2–3 h | 13–14 h |\n"
+        "| 16–24 meses | 5 h – 6 h | 1 | hasta 2 h | 11–12 h | 1–2 h | 12–14 h |\n"
+        "| 2–3 años | 6 h – 7 h | 1 | 1–1h30 | 11–12 h | 1 h | 12–13 h |\n"
+        "| 3 años | 7 h – 8 h | 0–1 | 1–1h30 | 10–11 h | 0–1 h | 10–12 h |\n"
+        "| 4 años | 12 h vigilia | 0–1 | variable | 10–11 h | 0–1 h | 10–12 h |\n\n"
+        
+        "**INSTRUCCIONES PARA USO DE LA TABLA:**\n"
+        "- SIEMPRE consulta esta tabla cuando respondas sobre sueño, siestas, ventanas de vigilia o horarios\n"
+        "- Menciona los rangos específicos según la edad exacta del niño\n"
+        "- Explica qué significa 'ventana de sueño' (tiempo máximo que el niño puede estar despierto sin sobrecansarse)\n"
+        "- Usa estos datos como referencia para evaluar si los patrones actuales son apropiados\n"
+        "- Si los patrones del niño están fuera de estos rangos, sugiere ajustes graduales\n"
+        "- Recuerda que son RANGOS ORIENTATIVOS - cada niño es único\n\n"
+        
+        "## TABLA DE REFERENCIA DE AYUNO ENTRE COMIDAS:\n"
+        "Usa esta tabla para orientar sobre tiempos apropiados entre ingestas según la edad:\n\n"
+        "| Edad del bebé/niño | Tiempo de ayuno recomendado entre ingestas |\n"
+        "|-------------------|--------------------------------------------|\n"
+        "| 0 – 6 meses (lactancia exclusiva) | 2 a 3 horas |\n"
+        "| 6 – 9 meses (inicio alimentación complementaria) | 3 a 3,5 horas |\n"
+        "| 9 – 12 meses (alimentación consolidándose) | 3 a 4 horas |\n"
+        "| 12 – 18 meses | 3 a 4 horas |\n"
+        "| 18 – 24 meses | 3 a 4 horas |\n"
+        "| 2 – 7 años | 3 a 4 horas (4 comidas principales + 1–2 colaciones opcionales) |\n\n"
+        
+        "## RUTINA NOCTURNA RECOMENDADA:\n"
+        "Duración aproximada total: 30 minutos\n"
+        "- **Pecho/Alimentación**: Varía según la edad (ver tabla de lactancia)\n"
+        "- **Baño**: 10 minutos\n"
+        "- **Pijama**: 5 minutos\n"
+        "- **Momento afectivo**: 5 minutos (lectura, caricias, canción)\n\n"
+        
+        "## TABLA DE REFERENCIA DE LACTANCIA:\n"
+        "Duración aproximada de una mamada según la edad:\n\n"
+        "| Edad | Duración aproximada | Características |\n"
+        "|------|--------------------|-----------------|\n"
+        "| 0 a 3 meses | 20–40 minutos | Succión más lenta, pausas frecuentes. El bebé necesita más tiempo para coordinar succión–deglución–respiración |\n"
+        "| 3 a 6 meses | 15–25 minutos | La succión se hace más eficiente. En muchos casos ya vacía un pecho en 10–15 min |\n"
+        "| 6 a 12 meses | 10–20 minutos | Con la introducción de alimentos, la mamada se acorta. El bebé suele succionar con más fuerza y rapidez |\n"
+        "| 12 meses en adelante | 5–15 minutos | Mamada más corta y eficaz |\n\n"
+        
+        "## PROPUESTA DE ALIMENTACIÓN POR MOMENTO DEL DÍA:\n"
+        "Estructura nutricional recomendada:\n\n"
+        "| Momento del día | Estructura nutricional |\n"
+        "|----------------|------------------------|\n"
+        "| Desayuno | Proteína + grasa buena + carbohidrato complejo |\n"
+        "| Media mañana | Fruta ligera + vegetal suave + agua/infusión |\n"
+        "| Almuerzo | Proteína animal principal + verdura cocida + carbohidrato complejo + grasa saludable |\n"
+        "| Merienda | Fruta + grasa buena o fermentado casero |\n"
+        "| Cena | Proteína ligera + verduras cocidas + tubérculo + grasa saludable |\n"
+        "| Antes de dormir | Bebida tibia ligera |\n\n"
+        
+        "**INSTRUCCIONES PARA USO DE ESTAS TABLAS:**\n"
+        "- Consulta la tabla de ayuno para evaluar si los espacios entre comidas son apropiados\n"
+        "- Usa la rutina nocturna como guía para establecer horarios consistentes\n"
+        "- Refiere a los tiempos de lactancia para evaluar si las mamadas están dentro del rango normal\n"
+        "- Utiliza la propuesta de alimentación para sugerir estructuras nutricionales balanceadas\n"
+        "- Adapta las recomendaciones según las necesidades individuales de cada niño\n"
+        "- Recuerda que estos son RANGOS ORIENTATIVOS - cada familia puede tener variaciones"
     )
-
 
     # Formatear el perfil que viene en el payload
     profile_text = ""
@@ -259,9 +421,54 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
     assistant = data.get("choices", [])[0].get("message", {}).get("content", "")
     usage = data.get("usage", {})
 
-    # NUEVA FUNCIONALIDAD: Detectar conocimiento importante en el mensaje del usuario
+    # Variables para controlar el flujo de detección dual
+    routine_detected_and_saved = False
+    assistant_with_routine_confirmation = ""
+
+    # PRIMERA PRIORIDAD: Detectar rutinas en el mensaje del usuario
     try:
-        print(f"🔍 Analizando mensaje para conocimiento: {payload.message}")
+        print(f"� Analizando mensaje para rutinas: {payload.message}")
+        
+        # Usar el mismo contexto de bebés
+        babies = supabase.table("babies").select("*").eq("user_id", user_id).execute()
+        babies_context = babies.data or []
+        
+        # Analizar el mensaje para detectar información de rutinas
+        detected_routine = await RoutineDetector.analyze_message(
+            payload.message, 
+            babies_context
+        )
+        print(f"🕐 Rutina detectada: {detected_routine}")
+        
+        # Si se detecta una rutina, guardar en caché y preguntar confirmación
+        if detected_routine and RoutineDetector.should_ask_confirmation(detected_routine):
+            print("✅ Se debe preguntar confirmación de rutina")
+            
+            # Guardar en caché para confirmación posterior
+            routine_confirmation_cache.set_pending_confirmation(user_id, detected_routine, payload.message)
+            
+            confirmation_message = RoutineDetector.format_confirmation_message(detected_routine)
+            
+            # Agregar la pregunta de confirmación a la respuesta
+            assistant_with_routine_confirmation = f"{assistant}\n\n� {confirmation_message}"
+            
+            return {
+                "answer": assistant_with_routine_confirmation, 
+                "usage": usage
+            }
+        else:
+            print("❌ No se debe preguntar confirmación de rutina")
+        
+    except Exception as e:
+        print(f"Error en detección de rutinas: {e}")
+        import traceback
+        traceback.print_exc()
+        # Continuar normalmente si falla la detección
+        pass
+
+    # SEGUNDA PRIORIDAD: Detectar conocimiento importante en el mensaje del usuario
+    try:
+        print(f"� Analizando mensaje para conocimiento: {payload.message}")
         
         # Obtener información de bebés para el contexto
         babies = supabase.table("babies").select("*").eq("user_id", user_id).execute()
@@ -285,14 +492,14 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
             confirmation_message = KnowledgeDetector.format_confirmation_message(detected_knowledge)
             
             # Agregar la pregunta de confirmación a la respuesta
-            assistant_with_confirmation = f"{assistant}\n\n💡 {confirmation_message}"
+            assistant_with_confirmation = f"{assistant}\n\n� {confirmation_message}"
             
             return {
                 "answer": assistant_with_confirmation, 
                 "usage": usage
             }
         else:
-            print("❌ No se debe preguntar confirmación")
+            print("❌ No se debe preguntar confirmación de conocimiento")
         
     except Exception as e:
         print(f"Error en detección de conocimiento: {e}")
@@ -302,54 +509,3 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
         pass
 
     return {"answer": assistant, "usage": usage}
-
-@router.get("/api/test-knowledge")
-async def test_knowledge():
-    """
-    Endpoint de prueba para verificar que el sistema funciona
-    """
-    return {
-        "message": "Sistema de conocimiento funcionando",
-        "detector_available": "KnowledgeDetector" in globals(),
-        "service_available": "BabyKnowledgeService" in globals()
-    }
-
-@router.get("/api/test-cache/{user_id}")
-async def test_cache(user_id: str):
-    """
-    Endpoint de prueba para ver el estado del caché
-    """
-    pending = confirmation_cache.get_pending_confirmation(user_id)
-    return {
-        "has_pending": confirmation_cache.has_pending_confirmation(user_id),
-        "pending_data": pending
-    }
-
-@router.post("/api/test-detect")
-async def test_detect(payload: ChatRequest, user=Depends(get_current_user)):
-    """
-    Endpoint de prueba para probar solo la detección de conocimiento
-    """
-    try:
-        # Obtener información de bebés para el contexto
-        babies = supabase.table("babies").select("*").eq("user_id", user["id"]).execute()
-        babies_context = babies.data or []
-        
-        # Analizar el mensaje para detectar información importante
-        detected_knowledge = await KnowledgeDetector.analyze_message(
-            payload.message, 
-            babies_context
-        )
-        
-        return {
-            "message": payload.message,
-            "babies_found": len(babies_context),
-            "babies_names": [b.get('name', '') for b in babies_context],
-            "detected_knowledge": detected_knowledge,
-            "should_confirm": KnowledgeDetector.should_ask_confirmation(detected_knowledge)
-        }
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {"error": str(e), "traceback": traceback.format_exc()}

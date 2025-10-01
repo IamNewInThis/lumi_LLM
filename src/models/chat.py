@@ -8,4 +8,8 @@ class ChatRequest(BaseModel):
 
 class KnowledgeConfirmRequest(BaseModel):
     detected_knowledge: List[Dict]
-    confirm: bool 
+    confirm: bool  # True para guardar, False para ignorar
+
+class RoutineConfirmRequest(BaseModel):
+    detected_routine: Dict
+    confirm: bool  # True para guardar, False para ignorar
