@@ -1,0 +1,54 @@
+{
+  "id": "berrinches_regulacion_emocional",
+  "tema": "desarrollo_emocional",
+  "subtema": "berrinches_autoregulacion", 
+  "edad_rango": {
+    "min_meses": 18,
+    "max_meses": 48,
+    "descripcion": "1.5 a 4 años"
+  },
+  "keywords": ["berrinches", "regulación", "emocional", "límites", "acompañamiento"],
+  "señales": [
+    "Explosiones emocionales intensas",
+    "Dificultad para calmarse solo",
+    "Reacciones desproporcionadas a frustraciones menores",
+    "Busca atención o control a través del berrinche",
+    "Se calma cuando se siente comprendido"
+  ],
+  "acciones": [
+    {
+      "accion": "Validar la emoción antes de intervenir",
+      "cuando": "En el momento del berrinche",
+      "duracion": "Primeros 30 segundos"
+    },
+    {
+      "accion": "Mantener calma y presencia sin intentar 'arreglar'",
+      "cuando": "Durante toda la duración del berrinche",
+      "duracion": "Hasta que naturalmente se calme"
+    },
+    {
+      "accion": "Ofrecer contención física si la acepta",
+      "cuando": "Si el niño busca cercanía",
+      "duracion": "Según necesidad del niño"
+    },
+    {
+      "accion": "Reflexionar juntos después, cuando esté calmado",
+      "cuando": "15-30 minutos post-berrinche",
+      "duracion": "Conversación breve"
+    }
+  ],
+  "frases_sugeridas": [
+    "Lo que observas en [nombre] es parte normal de su desarrollo emocional...",
+    "Su cerebro está aprendiendo a manejar emociones grandes en un cuerpo pequeño",
+    "Puedes acompañarle simplemente estando presente, sin necesidad de 'solucionarlo'",
+    "¿Qué crees que pudo haber activado esta reacción emocional?"
+  ],
+  "validaciones": [
+    "Verificar si hay necesidades básicas no cubiertas (hambre, sueño, estímulos)",
+    "Evaluar si hay cambios recientes en rutinas o entorno",
+    "Confirmar que límites están siendo aplicados con amor y consistencia",
+    "Observar patrones: horarios, actividades, contextos del berrinche"
+  ],
+  "referencias": ["disciplina_sin_lagrimas.pdf", "el_cerebro_del_niño.pdf", "emociones.pdf", "limites.pdf"],
+  "tags_semanticos": ["emociones", "desarrollo", "límites", "acompañamiento", "regulación"]
+}

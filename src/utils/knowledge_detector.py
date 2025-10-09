@@ -5,13 +5,21 @@ import os
 from typing import Dict, List, Optional, Tuple
 
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 class KnowledgeDetector:
     """
     Clase para detectar información importante sobre bebés en las conversaciones
     que debería ser guardada en el perfil para mejorar futuras respuestas.
     """
+
+    GENERIC_NAMES = {
+        "el bebé", "el bebe", "la bebé", "la bebe",
+        "el niño", "el nino", "la niña", "la nina",
+        "el pequeño", "la pequeña", "el peque", "la peque",
+        "tu bebé", "tu bebe", "tu niño", "tu niña",
+        "el bb", "la bb"
+    }
     
     CATEGORIES = {
         "alergias": {
@@ -176,6 +184,56 @@ class KnowledgeDetector:
         return []
 
     @classmethod
+    def enrich_baby_names(
+        cls,
+        detected_knowledge: List[Dict],
+        babies_context: List[Dict],
+        original_message: str
+    ) -> None:
+        """
+        Intenta reemplazar nombres genéricos por nombres reales del contexto.
+        Mutates detected_knowledge in place.
+        """
+        if not detected_knowledge:
+            return
+
+        original_lower = (original_message or "").lower()
+
+        # Mapear nombres reales disponibles
+        baby_names_map = {}
+        for baby in babies_context or []:
+            name = baby.get("name")
+            if not name:
+                continue
+            baby_names_map[name.lower()] = name
+
+        # Si solo hay un bebé, úsalo como fallback directo
+        single_baby_name = None
+        if len(baby_names_map) == 1:
+            single_baby_name = next(iter(baby_names_map.values()))
+
+        for item in detected_knowledge:
+            raw_name = item.get("baby_name", "")
+            normalized = raw_name.lower().strip() if raw_name else ""
+
+            if normalized and normalized not in cls.GENERIC_NAMES:
+                # Ya trae un nombre claro
+                item["baby_name"] = raw_name.strip()
+                continue
+
+            # Intentar identificar el nombre desde el mensaje original
+            resolved_name = None
+            for lower_name, proper_name in baby_names_map.items():
+                if lower_name and lower_name in original_lower:
+                    resolved_name = proper_name
+                    break
+
+            if not resolved_name and single_baby_name:
+                resolved_name = single_baby_name
+
+            item["baby_name"] = resolved_name or "tu peque"
+
+    @classmethod
     def should_ask_confirmation(cls, detected_knowledge: List[Dict]) -> bool:
         """
         Determina si se debe preguntar al usuario antes de guardar
@@ -201,10 +259,11 @@ class KnowledgeDetector:
 
         if len(detected_knowledge) == 1:
             item = detected_knowledge[0]
+            baby_name = item.get('baby_name', 'tu peque')
             return (f"¿Te parece si guardo que {item.get('description', item.get('title', ''))} "
-                   f"en el perfil de {item.get('baby_name', 'tu bebé')} para recordarlo en futuras conversaciones?")
+                   f"en el perfil de {baby_name} para recordarlo en futuras conversaciones?")
         else:
-            baby_name = detected_knowledge[0].get('baby_name', 'tu bebé')
+            baby_name = detected_knowledge[0].get('baby_name', 'tu peque')
             items_text = ', '.join([item.get('title', '') for item in detected_knowledge])
             return (f"¿Te parece si guardo esta información sobre {baby_name} "
                    f"({items_text}) en su perfil para futuras conversaciones?")

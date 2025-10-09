@@ -1,0 +1,54 @@
+{
+  "id": "rutina_ventanas_vigilia_3_6_meses",
+  "tema": "sueño_descanso",
+  "subtema": "rutinas_ventanas_vigilia",
+  "edad_rango": {
+    "min_meses": 3,
+    "max_meses": 6,
+    "descripcion": "3-6 meses"
+  },
+  "keywords": ["rutina", "ventanas", "vigilia", "siestas", "horarios"],
+  "señales": [
+    "Bostezos frecuentes",
+    "Mirada perdida o vidriosa", 
+    "Se frota los ojos",
+    "Irritabilidad sin causa aparente",
+    "Quietud repentina o desinterés en jugar"
+  ],
+  "acciones": [
+    {
+      "accion": "Calcular edad exacta en años, meses y semanas",
+      "cuando": "Siempre al inicio de la consulta",
+      "duracion": "Inmediato"
+    },
+    {
+      "accion": "Aplicar ventana de vigilia de 1.5h-2h según tabla oficial",
+      "cuando": "Para estructurar rutina diaria",
+      "duracion": "Todo el día"
+    },
+    {
+      "accion": "Validar máximo 2h por siesta individual",
+      "cuando": "Al proponer horarios de siesta",
+      "duracion": "Cada siesta"
+    },
+    {
+      "accion": "Confirmar despertar antes de las 8:00 AM",
+      "cuando": "Al establecer rutina matutina",
+      "duracion": "Permanente"
+    }
+  ],
+  "frases_sugeridas": [
+    "Lo que observas en [nombre] es muy frecuente a esta edad, su sistema nervioso está madurando...",
+    "A los [edad exacta], las ventanas de vigilia ideales son de 1.5 a 2 horas aproximadamente",
+    "Puedes acompañarle observando estas señales de cansancio que me cuentas",
+    "¿Cómo se siente [nombre] durante estos momentos de transición al sueño?"
+  ],
+  "validaciones": [
+    "Verificar que ninguna siesta exceda 2 horas",
+    "Confirmar coherencia entre vigilia total y siestas del día",
+    "Validar que última ventana no exceda +30min del rango",
+    "Asegurar respeto a tiempos de ayuno según edad"
+  ],
+  "referencias": ["rutina_del_bebe.pdf", "sueño_infantil_gonzalo_pin.pdf"],
+  "tags_semanticos": ["desarrollo", "sueño", "rutina", "vigilia", "estructura"]
+}

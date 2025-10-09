@@ -1,0 +1,49 @@
+{
+  "id": "destete_nocturno_respetuoso",
+  "tema": "alimentacion_lactancia", 
+  "subtema": "destete_nocturno",
+  "edad_rango": {
+    "min_meses": 6,
+    "max_meses": 24,
+    "descripcion": "6 meses a 2 años"
+  },
+  "keywords": ["destete", "nocturno", "lactancia", "gradual", "respetuoso"],
+  "señales": [
+    "Despertares frecuentes para mamar por hábito",
+    "Mamadas muy cortas durante la noche",
+    "Bebé bien alimentado durante el día",
+    "Madre agotada por despertares nocturnos",
+    "Pérdida de apetito diurno por exceso nocturno"
+  ],
+  "acciones": [
+    {
+      "accion": "Aplicar etapas de Lorena Furtado secuencialmente",
+      "cuando": "Al iniciar proceso de destete nocturno",
+      "duracion": "Proceso gradual de semanas"
+    },
+    {
+      "accion": "Evaluar si alimentación diurna es suficiente",
+      "cuando": "Antes de iniciar cualquier modificación nocturna", 
+      "duracion": "3-5 días de observación"
+    },
+    {
+      "accion": "Ofrecer contención y presencia sin pecho gradualmente",
+      "cuando": "En despertares identificados como no nutricionales",
+      "duracion": "Progresivo según tolerancia"
+    }
+  ],
+  "frases_sugeridas": [
+    "Lo que describes sobre los despertares es muy común cuando el cuerpo ya no necesita tanto alimento nocturno...",
+    "Su desarrollo le está pidiendo consolidar mejor el sueño nocturno",
+    "Podemos acompañar este proceso de forma gradual y respetuosa",
+    "¿Cómo te sientes tú con la idea de hacer algunos ajustes nocturnos?"
+  ],
+  "validaciones": [
+    "Confirmar que bebé tiene peso adecuado y come bien de día",
+    "Verificar que madre esté emocionalmente preparada",
+    "Asegurar que no hay enfermedad o dentición activa",
+    "Confirmar entorno de apoyo familiar"
+  ],
+  "referencias": ["destete_nocturno.pdf"],
+  "tags_semanticos": ["lactancia", "sueño", "transición", "respetuoso", "gradual"]
+}

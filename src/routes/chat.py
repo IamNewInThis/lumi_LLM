@@ -25,14 +25,96 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 if not OPENAI_KEY:
     raise RuntimeError("Falta OPENAI_API_KEY en variables de entorno (.env)")
 
-def load_system_prompt():
-    """Carga el prompt base desde archivo template."""
-    prompt_path = Path(__file__).parent.parent / "prompts" / "system_prompt_base.md"
-    try:
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        raise RuntimeError(f"No se encontró el archivo de prompt en: {prompt_path}")
+print(f"🤖 Usando modelo OpenAI: {OPENAI_MODEL}")
+
+PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+SECTIONS_DIR = PROMPTS_DIR / "sections"
+
+ROUTINE_KEYWORDS = {
+    "organizar rutina", "organizar la rutina", "ajustar horarios", "cambiar horarios",
+    "estructurar el día", "horarios de comida", "horarios de sueño",
+    "rutina de sueño", "orden del día", "cronograma", "planificar el día",
+    "horarios del bebé", "rutina diaria", "establecer rutina", "fijar horarios",
+    "hacer una rutina", "hacer rutina", "quiero rutina", "crear rutina",
+    "armar rutina", "armar una rutina", "necesito rutina", "rutina para",
+    "una rutina para", "rutina", "horarios", "organizar el día"
+}
+
+NIGHT_WEANING_KEYWORDS = {
+    "tomas nocturnas", "destete nocturno", "desmame nocturno", "disminuir tomas",
+    "reducir tomas", "quitar tomas", "noches sin pecho", "lorena furtado"
+}
+
+PARTNER_KEYWORDS = {
+    "pareja", "esposo", "papá", "padre", "dividir", "ayuda", "trabajo nocturno",
+    "acompañar", "turno", "por turnos"
+}
+
+BEHAVIOR_KEYWORDS = {
+    "llora", "llanto", "llorando", "ruido", "grita", "alega", "canta", "om",
+    "gruñe", "hace sonido", "vocaliza", "emite", "sonido raro", "llanto diferente",
+    "se queja", "tararea", "canturrea", "murmura", "susurra"
+}
+
+def load_system_prompt(section_files=None):
+    """
+    Carga el prompt base y concatena secciones adicionales según sea necesario.
+    `section_files` debe ser una lista de nombres de archivo (por ejemplo, ["style.md"]).
+    """
+    base_path = PROMPTS_DIR / "system_prompt_base.md"
+    if not base_path.exists():
+        raise RuntimeError(f"No se encontró el archivo base del prompt en: {base_path}")
+
+    with open(base_path, "r", encoding="utf-8") as f:
+        parts = [f.read().strip()]
+
+    if section_files:
+        seen = set()
+        for filename in section_files:
+            if filename in seen:
+                continue
+            seen.add(filename)
+            section_path = SECTIONS_DIR / filename
+            if section_path.exists():
+                with open(section_path, "r", encoding="utf-8") as section_file:
+                    parts.append(section_file.read().strip())
+            else:
+                print(f"⚠️ Sección de prompt no encontrada: {section_path}")
+
+    return "\n\n".join(parts)
+
+def detect_consultation_type_and_load_template(message):
+    """
+    Detecta el tipo de consulta y carga el template específico correspondiente.
+    """
+    message_lower = message.lower()
+    
+    # Palabras clave para rutinas (debe ir PRIMERO para tener prioridad)
+    routine_keywords = ["rutina", "organizar", "horarios", "estructura", "día completo", "cronograma"]
+    if any(keyword in message_lower for keyword in routine_keywords):
+        template_path = PROMPTS_DIR / "template_rutina_mejorada.md"
+        if template_path.exists():
+            with open(template_path, "r", encoding="utf-8") as f:
+                return f"\n\n## TEMPLATE ESPECÍFICO PARA RUTINAS MEJORADAS:\n\n{f.read()}"
+    
+    # Palabras clave para ideas creativas de alimentos
+    creative_food_keywords = ["ideas creativas", "presentar", "verduras", "alimentos", "menú", "comida"]
+    if any(keyword in message_lower for keyword in creative_food_keywords):
+        template_path = PROMPTS_DIR / "template_ideas_creativas_alimentos.md"
+        if template_path.exists():
+            with open(template_path, "r", encoding="utf-8") as f:
+                return f"\n\n## TEMPLATE ESPECÍFICO PARA IDEAS CREATIVAS DE ALIMENTOS:\n\n{f.read()}"
+    
+    # Palabras clave para destete y lactancia
+    weaning_keywords = ["destete", "reducir tomas", "dejar pecho", "tomas nocturnas", "descansar mejor", 
+                       "transición lactancia", "lactancia", "pecho", "mamar", "teta"]
+    if any(keyword in message_lower for keyword in weaning_keywords):
+        template_path = PROMPTS_DIR / "template_destete_lactancia.md"
+        if template_path.exists():
+            with open(template_path, "r", encoding="utf-8") as f:
+                return f"\n\n## TEMPLATE ESPECÍFICO PARA DESTETE Y LACTANCIA:\n\n{f.read()}"
+    
+    return ""
 
 def format_llm_output(text):
     """Limpia y formatea la salida del LLM para que sea más natural y legible."""
@@ -48,6 +130,7 @@ def format_llm_output(text):
     text = text.strip()
     
     return text
+
 
 async def get_user_profiles_and_babies(user_id, supabase_client):
     profiles = supabase_client.table("profiles").select("*").eq("id", user_id).execute()
@@ -273,34 +356,36 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
     # Contexto RAG, perfiles/bebés e historial de conversación
     rag_context = await get_rag_context(payload.message)
     
-    # Búsqueda RAG especializada para temas específicos
+    # Búsqueda RAG especializada y módulos dinámicos
     specialized_rag = ""
     message_lower = payload.message.lower()
-    
-    # Detectar consultas de desmame nocturno y agregar contexto especializado
-    if any(keyword in message_lower for keyword in [
-        "tomas nocturnas", "destete nocturno", "desmame nocturno", 
-        "disminuir tomas", "reducir tomas", "quitar tomas", "lorena furtado"
-    ]):
+
+    needs_night_weaning = any(keyword in message_lower for keyword in NIGHT_WEANING_KEYWORDS)
+    needs_partner = any(keyword in message_lower for keyword in PARTNER_KEYWORDS)
+    needs_behavior = any(keyword in message_lower for keyword in BEHAVIOR_KEYWORDS)
+    needs_routine = any(keyword in message_lower for keyword in ROUTINE_KEYWORDS)
+
+    if needs_night_weaning:
         specialized_rag = await get_rag_context("desmame nocturno etapas Lorena Furtado destete respetuoso")
-        print(f"🌙 Búsqueda RAG especializada para desmame nocturno")
-    
-    # Detectar consultas sobre trabajo con pareja y agregar contexto neurológico específico
-    elif any(keyword in message_lower for keyword in [
-        "pareja", "esposo", "papá", "padre", "dividir", "ayuda", "trabajo nocturno", 
-        "acompañar", "turno", "por turnos"
-    ]):
+        print("🌙 Búsqueda RAG especializada para desmame nocturno")
+    elif needs_partner:
         specialized_rag = await get_rag_context("pareja acompañamiento neurociencia asociación materna trabajo nocturno firmeza tranquila")
-        print(f"👫 Búsqueda RAG especializada para trabajo con pareja")
-    
-    # Detectar consultas sobre vocalizaciones y comportamientos específicos
-    elif any(keyword in message_lower for keyword in [
-        "llora", "ruido", "grita", "alega", "canta", "om", "gruñe", "hace sonido", 
-        "vocaliza", "emite", "sonido raro", "llanto diferente", "se queja"
-    ]):
+        print("👫 Búsqueda RAG especializada para trabajo con pareja")
+    elif needs_behavior:
         specialized_rag = await get_rag_context("vocalizaciones autorregulación desarrollo emocional llanto descarga neurociencia infantil")
-        print(f"🎵 Búsqueda RAG especializada para vocalizaciones y comportamientos")
-    
+        print("🎵 Búsqueda RAG especializada para vocalizaciones y comportamientos")
+
+    # Construir lista de secciones adicionales del prompt
+    prompt_sections = ["style.md"]
+    if needs_behavior:
+        prompt_sections.append("behavior.md")
+    if needs_routine:
+        prompt_sections.extend(["routines.md", "reference_tables.md"])
+    if needs_night_weaning:
+        prompt_sections.append("night_weaning.md")
+    if needs_partner:
+        prompt_sections.append("partner_support.md")
+
     # Combinar contextos RAG
     combined_rag_context = f"{rag_context}\n\n--- CONTEXTO ESPECIALIZADO ---\n{specialized_rag}" if specialized_rag else rag_context
     user_context, routines_context = await get_user_profiles_and_babies(user["id"], supabase)
@@ -319,9 +404,21 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
         )
 
     # Cargar y formatear el prompt maestro
-    system_prompt_template = load_system_prompt()
+    system_prompt_template = load_system_prompt(prompt_sections)
     
-    # Preparar contextos para el template
+    # Detectar tipo de consulta y agregar template específico
+    specific_template = detect_consultation_type_and_load_template(payload.message)
+    if specific_template:
+        system_prompt_template += specific_template
+        print(f"🎯 Template específico detectado y agregado")
+    
+    # Preparar contextos para el template (con optimización de longitud)
+    # Limitar el contexto RAG si es muy largo para evitar timeouts
+    max_rag_length = 3000
+    if len(combined_rag_context) > max_rag_length:
+        combined_rag_context = combined_rag_context[:max_rag_length] + "...\n[Contexto truncado por longitud]"
+        print(f"⚠️ Contexto RAG truncado por longitud")
+    
     formatted_system_prompt = system_prompt_template.format(
         today=today,
         user_context=user_context if user_context else "No hay información específica del usuario disponible.",
@@ -329,6 +426,10 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
         routines_context=routines_context if routines_context else "No hay rutinas específicas registradas.",
         rag_context=combined_rag_context if combined_rag_context else "No hay contexto especializado disponible para esta consulta."
     )
+    
+    # Log de longitud del prompt para debug
+    prompt_length = len(formatted_system_prompt)
+    print(f"📏 Longitud del prompt del sistema: {prompt_length} caracteres")
 
     # Construcción del body con prompt unificado
     body = {
@@ -345,11 +446,47 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
 
     headers = {"Authorization": f"Bearer {OPENAI_KEY}", "Content-Type": "application/json"}
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post("https://api.openai.com/v1/chat/completions", json=body, headers=headers)
-
-    if resp.status_code >= 300:
-        raise HTTPException(status_code=502, detail={"openai_error": resp.text})
+    # Retry logic con exponential backoff para manejar timeouts
+    max_retries = 3
+    base_timeout = 45.0
+    
+    for attempt in range(max_retries):
+        try:
+            current_timeout = base_timeout + (attempt * 15)  # 45s, 60s, 75s
+            print(f"🔄 Intento {attempt + 1}/{max_retries} - Timeout: {current_timeout}s")
+            
+            async with httpx.AsyncClient(timeout=current_timeout) as client:
+                resp = await client.post("https://api.openai.com/v1/chat/completions", json=body, headers=headers)
+            
+            if resp.status_code >= 300:
+                error_detail = resp.text
+                print(f"❌ Error OpenAI (intento {attempt + 1}): {error_detail}")
+                if attempt == max_retries - 1:  # Último intento
+                    raise HTTPException(status_code=502, detail={"openai_error": error_detail})
+                continue
+            
+            # Si llegamos aquí, la llamada fue exitosa
+            break
+            
+        except httpx.ReadTimeout as e:
+            print(f"⏰ Timeout en intento {attempt + 1}/{max_retries}")
+            if attempt == max_retries - 1:  # Último intento
+                return {
+                    "answer": "Lo siento, el sistema está experimentando demoras. Por favor, intenta reformular tu pregunta de manera más breve o inténtalo de nuevo en unos momentos.",
+                    "usage": {}
+                }
+            # Esperar antes del siguiente intento
+            import asyncio
+            await asyncio.sleep(2 ** attempt)  # 1s, 2s, 4s
+            continue
+        except Exception as e:
+            print(f"❌ Error inesperado en intento {attempt + 1}: {e}")
+            if attempt == max_retries - 1:
+                return {
+                    "answer": "Hubo un problema técnico. Por favor, intenta de nuevo en unos momentos.",
+                    "usage": {}
+                }
+            continue
 
     data = resp.json()
     assistant = data.get("choices", [])[0].get("message", {}).get("content", "")
@@ -404,6 +541,75 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
         # Continuar normalmente si falla la detección
         pass
 
+    # NUEVA FUNCIONALIDAD: Detección SIMPLE de rutinas en la RESPUESTA de Lumi
+    try:
+        print(f"🔍 Analizando respuesta de Lumi para rutinas (método simple)...")
+        
+        # 1. Detectar horarios estructurados
+        import re
+        time_patterns = re.findall(r'\*\*\d{1,2}:\d{2}[–-]\d{1,2}:\d{2}\*\*', assistant)
+        
+        # 2. Detectar palabras clave de rutina
+        routine_indicators = [
+            "rutina diaria", "rutina para", "🧭", "🌅", "mañana", "mediodía", "tarde", "noche",
+            "despertar", "desayuno", "almuerzo", "siesta", "cena", "baño",
+            "resumen visual", "bloques", "actividad principal"
+        ]
+        found_indicators = sum(1 for indicator in routine_indicators if indicator in assistant.lower())
+        
+        # 3. Criterios simples para detectar rutina
+        has_structured_times = len(time_patterns) >= 3
+        has_routine_content = found_indicators >= 5
+        
+        print(f"⏰ Horarios encontrados: {len(time_patterns)}")
+        print(f"📋 Indicadores de rutina: {found_indicators}")
+        print(f"🎯 Es rutina estructurada: {has_structured_times and has_routine_content}")
+        
+        if has_structured_times and has_routine_content:
+            print("✅ Rutina detectada con método simple - Agregando confirmación")
+            
+            # Obtener información de bebés
+            babies = supabase.table("babies").select("*").eq("user_id", user_id).execute()
+            babies_context = babies.data or []
+            baby_name = babies_context[0]['name'] if babies_context else "tu bebé"
+            
+            # Crear rutina simple estructurada
+            simple_routine = {
+                "routine_name": f"Rutina diaria para {baby_name}",
+                "baby_name": baby_name,
+                "confidence": 0.9,  # Alta confianza para método simple
+                "routine_type": "daily",
+                "context_summary": "Rutina diaria detectada automáticamente",
+                "activities": [
+                    {
+                        "time_start": pattern.replace('*', '').split('–')[0],
+                        "time_end": pattern.replace('*', '').split('–')[1] if '–' in pattern else None,
+                        "activity": f"Actividad {i+1}",
+                        "details": "Actividad detectada automáticamente",
+                        "activity_type": "care"
+                    }
+                    for i, pattern in enumerate(time_patterns[:10])  # Máximo 10 actividades
+                ]
+            }
+            
+            # Guardar en caché y pedir confirmación
+            routine_confirmation_cache.set_pending_confirmation(user_id, simple_routine, assistant)
+            
+            confirmation_message = f"¿Te parece si guardo esta rutina para {baby_name} en su perfil para futuras conversaciones?"
+            assistant_with_routine_confirmation = f"{assistant}\n\n📋 {confirmation_message}"
+            
+            return {
+                "answer": assistant_with_routine_confirmation, 
+                "usage": usage
+            }
+        else:
+            print("❌ No es una rutina estructurada según criterios simples")
+            
+    except Exception as e:
+        print(f"Error en detección simple de rutinas: {e}")
+        # Continuar normalmente si falla
+        pass
+
     # SEGUNDA PRIORIDAD: Detectar conocimiento importante en el mensaje del usuario
     try:
         print(f"� Analizando mensaje para conocimiento: {payload.message}")
@@ -419,6 +625,13 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
             babies_context
         )
         print(f"🧠 Conocimiento detectado: {detected_knowledge}")
+
+        # Enriquecer nombres genéricos con nombres reales del contexto
+        KnowledgeDetector.enrich_baby_names(
+            detected_knowledge,
+            babies_context=babies_context,
+            original_message=payload.message
+        )
         
         # Si se detecta conocimiento importante, guardar en caché y preguntar
         if detected_knowledge and KnowledgeDetector.should_ask_confirmation(detected_knowledge):
