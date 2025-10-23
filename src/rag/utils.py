@@ -31,16 +31,25 @@ async def get_rag_context(query: str, k: int = 20, top_sources: int = 3) -> str:
         'límites': ['limites.pdf', 'libertad.pdf'],
         'castigos': ['disciplina_sin_lagrimas.pdf'],
         'rabietas': ['disciplina_sin_lagrimas.pdf'],
+        'conflictos': ['disciplina_sin_lagrimas.pdf', 'emociones.pdf', 'el_cerebro_del_nino.pdf'],
+        'hermanos': ['disciplina_sin_lagrimas.pdf', 'emociones.pdf', 'el_cerebro_del_nino.pdf'],
+        'celos': ['disciplina_sin_lagrimas.pdf', 'emociones.pdf', 'el_cerebro_del_nino.pdf', 'limites.pdf'],
+        'peleas': ['disciplina_sin_lagrimas.pdf', 'emociones.pdf', 'el_cerebro_del_nino.pdf', 'limites.pdf'],
+        'territorialidad': ['disciplina_sin_lagrimas.pdf', 'emociones.pdf', 'el_cerebro_del_nino.pdf', 'limites.pdf'],
+        'compartir': ['disciplina_sin_lagrimas.pdf', 'emociones.pdf', 'el_cerebro_del_nino.pdf'],
+        'rivalidad': ['disciplina_sin_lagrimas.pdf', 'emociones.pdf', 'el_cerebro_del_nino.pdf'],
+        'juguetes': ['el_cerebro_del_nino.pdf', 'emociones.pdf'],
         'sobreestimulacion': ['simplicity_parenting.pdf'],
-        'actividades': ['simplicity_parenting.pdf'],
-        'exceso': ['simplicity_parenting.pdf'],
-        'rutina': ['rutina_del_bebe.pdf'],
-        'sueño': ['rutina_del_bebe.pdf'],
-        'alimentación': ['child_of_mine_feeding.pdf'],
-        'comida': ['child_of_mine_feeding.pdf'],
-        'emociones': ['emociones.pdf'],
-        'crianza respetuosa': ['emociones.pdf', 'libertad.pdf'],
+        'actividades': ['simplicity_parenting.pdf', 'rutina_del_bebe.pdf', 'el_cerebro_del_nino.pdf'],
+        'exceso': ['simplicity_parenting.pdf', 'limites.pdf', 'el_cerebro_del_nino.pdf'],
+        'rutina': ['rutina_del_bebe.pdf', 'simplicity_parenting.pdf'],
+        'sueño': ['acompanar_despertares.pdf','rutina_del_bebe.pdf', 'destete_nocturno.pdf', 'dormir_en_su_cuna.pdf'],
+        'alimentación': ['child_of_mine_feeding.pdf', 'el_cerebro_del_nino.pdf'],
+        'comida': ['child_of_mine_feeding.pdf', 'el_cerebro_del_nino.pdf'],
+        'emociones': ['emociones.pdf', 'el_cerebro_del_nino.pdf'],
+        'crianza respetuosa': ['emociones.pdf', 'libertad.pdf', 'simplicity_parenting.pdf'],
         'respetuosa': ['emociones.pdf', 'libertad.pdf'],
+        'viajes': ['viajes_con_niños_mc.pdf','tips_viajes_r' ],
     }
     
     query_lower = query.lower()
@@ -61,7 +70,7 @@ async def get_rag_context(query: str, k: int = 20, top_sources: int = 3) -> str:
         if src not in final_sources and len(final_sources) < top_sources:
             final_sources.append(src)
     
-    #print(f"🎯 Documentos dominantes detectados: {final_sources}")
+    print(f"🎯 Documentos dominantes detectados: {final_sources}")
 
     # Paso 3: búsqueda refinada en esas fuentes
     combined = []

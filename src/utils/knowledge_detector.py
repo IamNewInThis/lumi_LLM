@@ -21,6 +21,7 @@ class KnowledgeDetector:
         "el bb", "la bb"
     }
     
+    # Categoria para guardar conocimiento detectado
     CATEGORIES = {
         "alergias": {
             "subcategories": ["alimentarias", "ambientales", "medicamentos", "cutaneas"],
@@ -56,6 +57,16 @@ class KnowledgeDetector:
             "subcategories": ["motor", "lenguaje", "social", "cognitivo", "hitos"],
             "importance": 4,
             "keywords": ["ya camina", "dice palabras", "gatea", "sonrie", "hito desarrollo"]
+        },
+        "general": {
+            "subcategories": ["escolaridad", "cuidado", "contexto_familiar", "clima", "entorno"],
+            "importance": 2,
+            "keywords": [
+                "escolinha", "guarderia", "jardin", "colegio", "escuela", "kindergarten",
+                "no va a la escuela", "deja de ir", "está en casa", "lo cuidan", "cuidadora", "niñera",
+                "vive con", "clima", "temperatura", "trabajo de la madre", "trabajo del padre",
+                "vacaciones", "mudamos", "no vamos", "se queda en casa"
+            ]
         }
     }
 
@@ -97,15 +108,18 @@ class KnowledgeDetector:
         5. **salud** (importancia 4): Condiciones médicas, medicamentos, síntomas frecuentes
         6. **rutinas** (importancia 3): Horarios de sueño, comidas, actividades, estructura diaria
         7. **desarrollo** (importancia 4): Hitos del desarrollo, habilidades motoras, lenguaje, sociales
+        8. **general** (importancia 2): Información de contexto general como asistencia a escolinha/guardería, quién lo cuida, clima habitual, si está en casa o con familia.
 
         EJEMPLOS DE DETECCIÓN:
         - "mi bebé no come mantequilla" → alimentacion/no_le_gusta
         - "Franco es alérgico al huevo" → alergias/alimentarias  
         - "le encantan los bloques" → juguetes/favoritos
         - "tiene miedo a los perros" → comportamiento/miedos
+        - "Martín ya no va a la escolinha" → general/escolaridad
 
         INSTRUCCIONES CRÍTICAS:
         - SIEMPRE detecta restricciones alimentarias, rechazos de comida, o preferencias claras
+        - Todo dato de contexto general (quién lo cuida, si va al jardín, vive con abuelos, clima) va en categoría GENERAL
         - Solo detecta información ESPECÍFICA y FACTUAL sobre el bebé/niño
         - NO detectes: preguntas generales, dudas, información ya obvia por la edad
         - SI detectas: datos concretos que ayuden a personalizar futuras respuestas
@@ -243,6 +257,8 @@ class KnowledgeDetector:
         
         # Preguntar si hay al menos un elemento con importancia >= 2 o confianza >= 0.6
         for item in detected_knowledge:
+            if item.get('category') == 'general':
+                continue  # La categoría general se guarda automáticamente
             if (item.get('importance_level', 0) >= 2 or 
                 item.get('confidence', 0) >= 0.6):
                 return True

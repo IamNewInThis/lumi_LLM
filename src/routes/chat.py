@@ -1,9 +1,11 @@
 # src/routes/chat.py
 import os
 import httpx
+import unicodedata
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime
 from pathlib import Path
+from typing import List
 from ..models.chat import ChatRequest, KnowledgeConfirmRequest
 from ..auth import get_current_user
 from src.rag.utils import get_rag_context
@@ -29,7 +31,10 @@ print(f"🤖 Usando modelo OpenAI: {OPENAI_MODEL}")
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 SECTIONS_DIR = PROMPTS_DIR / "sections"
+TEMPLATES_DIR = PROMPTS_DIR / "templates"
+EXAMPLES_DIR = PROMPTS_DIR / "examples"
 
+# Establecer palabras clave para detección de temas
 ROUTINE_KEYWORDS = {
     "organizar rutina", "organizar la rutina", "ajustar horarios", "cambiar horarios",
     "estructurar el día", "horarios de comida", "horarios de sueño",
@@ -56,10 +61,112 @@ BEHAVIOR_KEYWORDS = {
     "se queja", "tararea", "canturrea", "murmura", "susurra"
 }
 
+GREETING_PHRASES = {
+    "hola",
+    "hola lumi",
+    "hola hola",
+    "buen dia",
+    "buenos dias",
+    "buenas",
+    "buenas tardes",
+    "buenas noches",
+    "hello",
+    "hi",
+    "hey",
+    "saludos",
+    "hola buen dia",
+    "hola buenos dias",
+    "hola buenas",
+    "hola buenas tardes",
+    "hola buenas noches"
+}
+
+EXAMPLE_MATCHERS = [
+    {
+        "file": "play_interest_loss.md",
+        "any_groups": [
+            ["juguet", "juegos", "jugar", "juegues"],
+            [
+                "no le gusta", "no se entretiene", "no los usa", "los deja",
+                "no los quiere", "aburrido", "pierde interes", "pierde interés",
+                "no se interesa", "ya no se interesa"
+            ]
+        ]
+    }
+]
+
+def normalize_for_greeting(text: str) -> str:
+    text = unicodedata.normalize("NFD", text.lower())
+    text = "".join(
+        ch
+        if unicodedata.category(ch) != "Mn" and (ch.isalnum() or ch.isspace())
+        else " "
+        for ch in text
+    )
+    return " ".join(text.split())
+
+def is_simple_greeting(message: str) -> bool:
+    normalized = normalize_for_greeting(message)
+    return normalized in GREETING_PHRASES
+
+def detect_examples(message: str) -> List[str]:
+    """
+    Devuelve una lista de archivos de ejemplos relevantes para el mensaje.
+    """
+    normalized = normalize_for_greeting(message)
+    matched = []
+
+    for matcher in EXAMPLE_MATCHERS:
+        any_groups = matcher.get("any_groups")
+        if any_groups:
+            group_matches = all(
+                any(token in normalized for token in group)
+                for group in any_groups
+            )
+            if group_matches:
+                matched.append(matcher["file"])
+        else:
+            match_all = all(token in normalized for token in matcher.get("match_all", []))
+            match_any_tokens = matcher.get("match_any", [])
+            match_any = any(token in normalized for token in match_any_tokens) if match_any_tokens else True
+
+            if match_all and match_any:
+                matched.append(matcher["file"])
+
+    # quitar duplicados conservando orden
+    seen = set()
+    unique = []
+    for file in matched:
+        if file not in seen:
+            seen.add(file)
+            unique.append(file)
+
+    return unique
+
+def load_examples(example_files: List[str]) -> str:
+    """
+    Carga el contenido de ejemplos de referencia para guiar la respuesta.
+    """
+    contents = []
+
+    for filename in example_files:
+        example_path = EXAMPLES_DIR / filename
+        if example_path.exists():
+            with open(example_path, "r", encoding="utf-8") as example_file:
+                contents.append(example_file.read().strip())
+        else:
+            print(f"⚠️ Ejemplo no encontrado: {example_path}")
+
+    if not contents:
+        return ""
+
+    header = "## EJEMPLOS DE RESPUESTA (Referencia para adaptar, no copiar literal)\n"
+    return header + "\n\n".join(contents)
+
 def load_system_prompt(section_files=None):
     """
-    Carga el prompt base y concatena secciones adicionales según sea necesario.
-    `section_files` debe ser una lista de nombres de archivo (por ejemplo, ["style.md"]).
+        Carga el prompt base y concatena secciones adicionales según sea necesario.
+        `section_files` debe ser una lista de nombres de archivo (por ejemplo, ["style.md"]).
     """
     base_path = PROMPTS_DIR / "system_prompt_base.md"
     if not base_path.exists():
@@ -85,14 +192,14 @@ def load_system_prompt(section_files=None):
 
 def detect_consultation_type_and_load_template(message):
     """
-    Detecta el tipo de consulta y carga el template específico correspondiente.
+        Detecta el tipo de consulta y carga el template específico correspondiente.
     """
     message_lower = message.lower()
     
     # Palabras clave para rutinas (debe ir PRIMERO para tener prioridad)
     routine_keywords = ["rutina", "organizar", "horarios", "estructura", "día completo", "cronograma"]
     if any(keyword in message_lower for keyword in routine_keywords):
-        template_path = PROMPTS_DIR / "template_rutina_mejorada.md"
+        template_path = TEMPLATES_DIR / "template_rutina_mejorada.md"
         if template_path.exists():
             with open(template_path, "r", encoding="utf-8") as f:
                 return f"\n\n## TEMPLATE ESPECÍFICO PARA RUTINAS MEJORADAS:\n\n{f.read()}"
@@ -100,7 +207,7 @@ def detect_consultation_type_and_load_template(message):
     # Palabras clave para ideas creativas de alimentos
     creative_food_keywords = ["ideas creativas", "presentar", "verduras", "alimentos", "menú", "comida"]
     if any(keyword in message_lower for keyword in creative_food_keywords):
-        template_path = PROMPTS_DIR / "template_ideas_creativas_alimentos.md"
+        template_path = TEMPLATES_DIR / "template_ideas_creativas_alimentos.md"
         if template_path.exists():
             with open(template_path, "r", encoding="utf-8") as f:
                 return f"\n\n## TEMPLATE ESPECÍFICO PARA IDEAS CREATIVAS DE ALIMENTOS:\n\n{f.read()}"
@@ -109,7 +216,7 @@ def detect_consultation_type_and_load_template(message):
     weaning_keywords = ["destete", "reducir tomas", "dejar pecho", "tomas nocturnas", "descansar mejor", 
                        "transición lactancia", "lactancia", "pecho", "mamar", "teta"]
     if any(keyword in message_lower for keyword in weaning_keywords):
-        template_path = PROMPTS_DIR / "template_destete_lactancia.md"
+        template_path = TEMPLATES_DIR / "template_destete_lactancia.md"
         if template_path.exists():
             with open(template_path, "r", encoding="utf-8") as f:
                 return f"\n\n## TEMPLATE ESPECÍFICO PARA DESTETE Y LACTANCIA:\n\n{f.read()}"
@@ -131,17 +238,49 @@ def format_llm_output(text):
     
     return text
 
-
-async def get_user_profiles_and_babies(user_id, supabase_client):
+async def get_user_profiles_and_babies(user_id, supabase_client, baby_id=None, babies_data=None):
+    """
+        Recupera perfiles y bebés del usuario y formatea el contexto.
+        Si se proporciona baby_id, limita el contexto a ese bebé.
+    """
     profiles = supabase_client.table("profiles").select("*").eq("id", user_id).execute()
-    babies = supabase_client.table("babies").select("*").eq("user_id", user_id).execute()
+    if babies_data is None:
+        babies_response = supabase_client.table("babies").select("*").eq("user_id", user_id).execute()
+        babies_data = babies_response.data or []
 
-    # Obtener conocimiento específico de todos los bebés
-    knowledge_by_baby = await BabyKnowledgeService.get_all_user_knowledge(user_id)
+    babies_data = babies_data or []
+    selected_babies = babies_data
+    if baby_id:
+        selected_babies = [b for b in babies_data if b["id"] == baby_id]
+        # Si no se encuentra el baby_id, mantener todos para no dejar sin contexto
+        if not selected_babies:
+            selected_babies = babies_data
+        else:
+            print(f"👶 Bebé seleccionado para contexto: {selected_babies[0]['name']} ({baby_id})")
+
+    # Obtener conocimiento específico
+    if baby_id and selected_babies:
+        baby = selected_babies[0]
+        knowledge_items = await BabyKnowledgeService.get_baby_knowledge(user_id, baby_id)
+        knowledge_by_baby = {
+            baby_id: {
+                "baby_name": baby["name"],
+                "knowledge": knowledge_items
+            }
+        }
+    else:
+        knowledge_by_baby = await BabyKnowledgeService.get_all_user_knowledge(user_id)
     knowledge_context = BabyKnowledgeService.format_knowledge_for_context(knowledge_by_baby)
     
-    # Obtener rutinas de todos los bebés
-    routines_by_baby = await RoutineService.get_all_user_routines(user_id)
+    # Obtener rutinas
+    if baby_id and selected_babies:
+        baby = selected_babies[0]
+        routines_list = await RoutineService.get_user_routines(user_id, baby_id)
+        routines_by_baby = {
+            baby["name"]: routines_list
+        }
+    else:
+        routines_by_baby = await RoutineService.get_all_user_routines(user_id)
     routines_context = RoutineService.format_routines_for_context(routines_by_baby)
 
     profile_texts = [
@@ -150,8 +289,8 @@ async def get_user_profiles_and_babies(user_id, supabase_client):
     ] if profiles.data else []
 
     baby_texts = []
-    if babies.data:
-        for b in babies.data:
+    if selected_babies:
+        for b in selected_babies:
             edad_anios = calcular_edad(b["birthdate"])
             edad_meses = calcular_meses(b["birthdate"])
 
@@ -191,22 +330,35 @@ async def get_user_profiles_and_babies(user_id, supabase_client):
 
     return context.strip(), routines_context.strip()
 
-async def get_conversation_history(user_id, supabase_client, limit_per_role=7):
+async def get_conversation_history(user_id, supabase_client, limit_per_role=7, baby_id=None, filter_by_baby=False):
     """
-    Recupera los últimos mensajes del usuario y del asistente para mantener contexto en la conversación.
+        Recupera los últimos mensajes 5 del usuario y del asistente para mantener contexto en la conversación.
+        Filtrandor por el baby_id
     """
-    user_msgs = supabase_client.table("conversations") \
+    user_query = supabase_client.table("conversations") \
         .select("*") \
         .eq("user_id", user_id) \
-        .eq("role", "user") \
+        .eq("role", "user")
+
+    assistant_query = supabase_client.table("conversations") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .eq("role", "assistant")
+
+    if filter_by_baby:
+        if baby_id is None:
+            user_query = user_query.filter("baby_id", "is", "null")
+            assistant_query = assistant_query.filter("baby_id", "is", "null")
+        else:
+            user_query = user_query.eq("baby_id", baby_id)
+            assistant_query = assistant_query.eq("baby_id", baby_id)
+
+    user_msgs = user_query \
         .order("created_at", desc=True) \
         .limit(limit_per_role) \
         .execute()
 
-    assistant_msgs = supabase_client.table("conversations") \
-        .select("*") \
-        .eq("user_id", user_id) \
-        .eq("role", "assistant") \
+    assistant_msgs = assistant_query \
         .order("created_at", desc=True) \
         .limit(limit_per_role) \
         .execute()
@@ -229,6 +381,10 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="message required")
 
     user_id = user["id"]
+    
+    babies_response = supabase.table("babies").select("*").eq("user_id", user_id).execute()
+    babies_context = babies_response.data or []
+    print(f"👶 Bebés en contexto disponible: {len(babies_context)}")
     
     # Verificar si es una respuesta de confirmación de preferencias (KNOWLEDGE)
     confirmation_response = confirmation_cache.is_confirmation_response(payload.message)
@@ -353,43 +509,61 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
                 routine_confirmation_cache.clear_pending_confirmation(user_id)
                 return {"answer": "👌 Entendido, no guardaré esa rutina.", "usage": {}}
 
+    message_text = payload.message.strip()
+    simple_greeting = is_simple_greeting(message_text)
+
     # Contexto RAG, perfiles/bebés e historial de conversación
-    rag_context = await get_rag_context(payload.message)
-    
-    # Búsqueda RAG especializada y módulos dinámicos
+    rag_context = ""
     specialized_rag = ""
-    message_lower = payload.message.lower()
+    needs_night_weaning = needs_partner = needs_behavior = needs_routine = False
 
-    needs_night_weaning = any(keyword in message_lower for keyword in NIGHT_WEANING_KEYWORDS)
-    needs_partner = any(keyword in message_lower for keyword in PARTNER_KEYWORDS)
-    needs_behavior = any(keyword in message_lower for keyword in BEHAVIOR_KEYWORDS)
-    needs_routine = any(keyword in message_lower for keyword in ROUTINE_KEYWORDS)
+    if not simple_greeting:
+        rag_context = await get_rag_context(payload.message)
+        
+        message_lower = payload.message.lower()
+        needs_night_weaning = any(keyword in message_lower for keyword in NIGHT_WEANING_KEYWORDS)
+        needs_partner = any(keyword in message_lower for keyword in PARTNER_KEYWORDS)
+        needs_behavior = any(keyword in message_lower for keyword in BEHAVIOR_KEYWORDS)
+        needs_routine = any(keyword in message_lower for keyword in ROUTINE_KEYWORDS)
 
-    if needs_night_weaning:
-        specialized_rag = await get_rag_context("desmame nocturno etapas Lorena Furtado destete respetuoso")
-        print("🌙 Búsqueda RAG especializada para desmame nocturno")
-    elif needs_partner:
-        specialized_rag = await get_rag_context("pareja acompañamiento neurociencia asociación materna trabajo nocturno firmeza tranquila")
-        print("👫 Búsqueda RAG especializada para trabajo con pareja")
-    elif needs_behavior:
-        specialized_rag = await get_rag_context("vocalizaciones autorregulación desarrollo emocional llanto descarga neurociencia infantil")
-        print("🎵 Búsqueda RAG especializada para vocalizaciones y comportamientos")
+        if needs_night_weaning:
+            specialized_rag = await get_rag_context("desmame nocturno etapas Lorena Furtado destete respetuoso")
+            print("🌙 Búsqueda RAG especializada para desmame nocturno")
+        elif needs_partner:
+            specialized_rag = await get_rag_context("pareja acompañamiento neurociencia asociación materna trabajo nocturno firmeza tranquila")
+            print("👫 Búsqueda RAG especializada para trabajo con pareja")
+        elif needs_behavior:
+            specialized_rag = await get_rag_context("vocalizaciones autorregulación desarrollo emocional llanto descarga neurociencia infantil")
+            print("🎵 Búsqueda RAG especializada para vocalizaciones y comportamientos")
 
     # Construir lista de secciones adicionales del prompt
-    prompt_sections = ["style.md"]
-    if needs_behavior:
-        prompt_sections.append("behavior.md")
-    if needs_routine:
-        prompt_sections.extend(["routines.md", "reference_tables.md"])
-    if needs_night_weaning:
-        prompt_sections.append("night_weaning.md")
-    if needs_partner:
-        prompt_sections.append("partner_support.md")
+    prompt_sections = ["style_manifest.md"]
+    if not simple_greeting:
+        if needs_behavior:
+            prompt_sections.append("behavior.md")
+        if needs_routine:
+            prompt_sections.extend(["routines.md", "reference_tables.md"])
+        if needs_night_weaning:
+            prompt_sections.append("night_weaning.md")
+        if needs_partner:
+            prompt_sections.append("partner_support.md")
 
     # Combinar contextos RAG
     combined_rag_context = f"{rag_context}\n\n--- CONTEXTO ESPECIALIZADO ---\n{specialized_rag}" if specialized_rag else rag_context
-    user_context, routines_context = await get_user_profiles_and_babies(user["id"], supabase)
-    history = await get_conversation_history(user["id"], supabase)  # 👈 historial del backend
+    selected_baby_id = payload.baby_id if "baby_id" in payload.__fields_set__ else None
+    user_context, routines_context = await get_user_profiles_and_babies(
+        user["id"],
+        supabase,
+        baby_id=selected_baby_id,
+        babies_data=babies_context
+    )
+    filter_by_baby = selected_baby_id is not None
+    history = await get_conversation_history(
+        user["id"],
+        supabase,
+        baby_id=selected_baby_id,
+        filter_by_baby=filter_by_baby
+    )  # 👈 historial del backend
 
     #print(f"📚 Contexto RAG recuperado:\n{rag_context[:500]}...\n")
     
@@ -411,6 +585,16 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
     if specific_template:
         system_prompt_template += specific_template
         print(f"🎯 Template específico detectado y agregado")
+
+    examples_block = ""
+    matched_examples = []
+    if not simple_greeting:
+        matched_examples = detect_examples(payload.message)
+        if matched_examples:
+            examples_block = load_examples(matched_examples)
+            if examples_block:
+                system_prompt_template += "\n\n" + examples_block
+                print(f"🧩 Ejemplos activados: {matched_examples}")
     
     # Preparar contextos para el template (con optimización de longitud)
     # Limitar el contexto RAG si es muy largo para evitar timeouts
@@ -614,11 +798,6 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
     try:
         print(f"� Analizando mensaje para conocimiento: {payload.message}")
         
-        # Obtener información de bebés para el contexto
-        babies = supabase.table("babies").select("*").eq("user_id", user_id).execute()
-        babies_context = babies.data or []
-        print(f"👶 Bebés encontrados: {len(babies_context)}")
-        
         # Analizar el mensaje para detectar información importante
         detected_knowledge = await KnowledgeDetector.analyze_message(
             payload.message, 
@@ -632,6 +811,47 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
             babies_context=babies_context,
             original_message=payload.message
         )
+
+        # Guardar automáticamente conocimiento general sin confirmación
+        general_items = [item for item in detected_knowledge if item.get("category") == "general"]
+        for general_item in general_items:
+            baby_name = general_item.get("baby_name")
+            auto_baby_id = None
+
+            if baby_name:
+                auto_baby_id = await BabyKnowledgeService.find_baby_by_name(user_id, baby_name)
+
+            if not auto_baby_id and selected_baby_id:
+                auto_baby_id = selected_baby_id
+
+            if not auto_baby_id and babies_context:
+                auto_baby_id = babies_context[0]["id"]
+
+            if not auto_baby_id:
+                print(f"⚠️ No se pudo determinar bebé para conocimiento general: {general_item}")
+                continue
+
+            knowledge_payload = {
+                "category": general_item["category"],
+                "subcategory": general_item.get("subcategory"),
+                "title": general_item.get("title", general_item.get("description", "Contexto general")),
+                "description": general_item.get("description", general_item.get("title", "")),
+                "importance_level": general_item.get("importance_level", 2)
+            }
+
+            saved_general = await BabyKnowledgeService.save_or_update_general_knowledge(
+                user_id,
+                auto_baby_id,
+                knowledge_payload
+            )
+
+            if saved_general:
+                print(f"🏠 Conocimiento general guardado automáticamente: {knowledge_payload['title']} (baby_id={auto_baby_id})")
+            else:
+                print(f"⚠️ No se pudo guardar conocimiento general: {knowledge_payload}")
+
+        # Filtrar conocimientos generales para no pedir confirmación
+        detected_knowledge = [item for item in detected_knowledge if item.get("category") != "general"]
         
         # Si se detecta conocimiento importante, guardar en caché y preguntar
         if detected_knowledge and KnowledgeDetector.should_ask_confirmation(detected_knowledge):
