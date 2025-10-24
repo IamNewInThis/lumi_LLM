@@ -13,20 +13,44 @@ class RoutineDetector:
         Analiza un mensaje para detectar información sobre rutinas
         """
         
-        # TODO agregar soporte para portugues/ingles
         # Palabras clave que indican conversaciones sobre rutinas
         routine_keywords = [
-            "rutina", "horario", "cronograma", "schedule", "agenda",
+            # Español
+            "rutina", "horario", "cronograma", "agenda",
             "despertar", "desayuno", "almuerzo", "cena", "siesta",
             "dormir", "sueño", "baño", "leche", "comida",
             "jardín", "colegio", "actividades", "estudio", "estudiar",
             "tareas", "deberes", "matemáticas", "lectura", "escritura",
             "ciencias", "arte", "lunes", "miércoles", "viernes",
-            "después de", "de la tarde", "pm", "3:00", "15:00",
-            "tres días", "semana", "establecer", "crear"
+            "después de", "de la tarde", "semana", "establecer", "crear",
+            # Inglés
+            "routine", "schedule", "timetable", "plan", "agenda",
+            "wake up", "breakfast", "lunch", "dinner", "nap",
+            "sleep", "bath", "milk", "meal", "snack",
+            "kindergarten", "school", "activities", "study", "homework",
+            "math", "reading", "writing", "science", "art",
+            "monday", "wednesday", "friday",
+            "afternoon", "evening", "pm", "am",
+            # Portugués
+            "rotina", "horário", "horario", "cronograma", "agenda",
+            "acordar", "despertar", "café da manhã", "cafe da manha", "almoco", "almoço", "jantar", "soneca",
+            "dormir", "sono", "banho", "leite", "comida",
+            "escola", "creche", "atividades", "atividades", "estudo", "estudar",
+            "tarefas", "deveres", "matemática", "matematica", "leitura", "escrita",
+            "ciências", "ciencias", "arte", "segunda", "quarta", "sexta",
+            "tarde", "manhã", "manha", "rotina diária", "rotina diaria"
         ]
-        
+
         message_lower = message.lower()
+
+        diaper_tokens = [
+            "pañal", "panal", "diaper", "fralda",
+            "cambiar pañal", "cambiar panal", "cambio de pañal",
+            "cambiarle el pañal", "cambiarle el panal"
+        ]
+        if any(token in message_lower for token in diaper_tokens):
+            print("🔁 Mensaje identificado como cambio de pañal. Saltando detección de rutinas.")
+            return None
         
         # Verificar si hay palabras clave relacionadas con rutinas
         has_routine_keywords = any(keyword in message_lower for keyword in routine_keywords)
@@ -128,8 +152,8 @@ Si NO hay información clara de rutina, responde: {{"has_routine_info": false}}
                 print("❌ No hay OPENAI_API_KEY configurada")
                 return None
                 
-            print(f"🤖 Enviando prompt a OpenAI...")
-            print(f"🤖 Prompt: {prompt[:500]}...")
+            # print(f"🤖 Enviando prompt a OpenAI...")
+            # print(f"🤖 Prompt: {prompt[:500]}...")
                 
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(

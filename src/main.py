@@ -11,13 +11,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.routes import chat
 
-app = FastAPI(title="Lumi LLM API", version="1.1.0")
+app = FastAPI(title="Lumi LLM API", version="1.2.0")
 
 @app.get("/api")
 async def root():
-    return {"message": "Lumi LLM API is running in version: 1.1.0."}
+    return {"message": "Lumi LLM API is running in version: 1.2.0."}
 
-print(f"Usando lumi versión 1.1.0")
+print(f"Usando lumi versión 1.2.0")
 
 app.add_middleware(
     CORSMiddleware,

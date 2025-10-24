@@ -51,8 +51,8 @@ NIGHT_WEANING_KEYWORDS = {
 }
 
 PARTNER_KEYWORDS = {
-    "pareja", "esposo", "papá", "padre", "dividir", "ayuda", "trabajo nocturno",
-    "acompañar", "turno", "por turnos"
+    "pareja", "esposo", "papá", "padre", "dividir", "trabajo nocturno",
+    "acompañar", "turno", "por turnos", "con mi pareja"
 }
 
 BEHAVIOR_KEYWORDS = {
@@ -90,6 +90,17 @@ EXAMPLE_MATCHERS = [
                 "no le gusta", "no se entretiene", "no los usa", "los deja",
                 "no los quiere", "aburrido", "pierde interes", "pierde interés",
                 "no se interesa", "ya no se interesa"
+            ]
+        ]
+    },
+    {
+        "file": "diaper_resistance.md",
+        "any_groups": [
+            ["pañal", "panal", "diaper", "fralda"],
+            [
+                "no se deja", "no quiere", "se resiste", "difícil", "dificil",
+                "problema", "no puedo", "no me deja", "no la puedo cambiar",
+                "entre los dos", "with my partner"
             ]
         ]
     }
@@ -143,6 +154,25 @@ def detect_examples(message: str) -> List[str]:
 
     return unique
 
+
+def load_instruction_dataset():
+    """
+    Carga el dataset de instrucciones Lumi (lumi_instruction_dataset_v1)
+    ubicado en prompts/examples y lo incluye como guía semántica base.
+    """
+    candidate_paths = [
+        EXAMPLES_DIR / "lumi_instruction_dataset_v1.md",
+        PROMPTS_DIR / "system" / "lumi_instruction_dataset_v1.md",
+    ]
+
+    dataset_path = next((path for path in candidate_paths if path.exists()), None)
+    if dataset_path:
+        with open(dataset_path, "r", encoding="utf-8") as dataset_file:
+            content = dataset_file.read().strip()
+            header = "## DATASET DE INSTRUCCIONES LUMI (v1)\nUsar como guía semántica general para tono, estructura y progresión de respuesta.\n\n"
+            return header + content
+    return ""
+
 def load_examples(example_files: List[str]) -> str:
     """
     Carga el contenido de ejemplos de referencia para guiar la respuesta.
@@ -168,12 +198,34 @@ def load_system_prompt(section_files=None):
         Carga el prompt base y concatena secciones adicionales según sea necesario.
         `section_files` debe ser una lista de nombres de archivo (por ejemplo, ["style.md"]).
     """
-    base_path = PROMPTS_DIR / "system_prompt_base.md"
-    if not base_path.exists():
-        raise RuntimeError(f"No se encontró el archivo base del prompt en: {base_path}")
+    candidate_paths = [
+        PROMPTS_DIR / "system_prompt_base.md",
+        PROMPTS_DIR / "system" / "system_prompt_base.md",
+    ]
+
+    base_path = next((path for path in candidate_paths if path.exists()), None)
+    if not base_path:
+        raise RuntimeError(
+            "No se encontró el archivo base del prompt. "
+            f"Rutas probadas: {', '.join(str(p) for p in candidate_paths)}"
+        )
 
     with open(base_path, "r", encoding="utf-8") as f:
         parts = [f.read().strip()]
+
+    system_dir = base_path.parent
+    additional_system_files = [
+        "system_operational_rules.md",
+        "system_style_guide.md",
+    ]
+
+    for filename in additional_system_files:
+        system_path = system_dir / filename
+        if system_path.exists():
+            with open(system_path, "r", encoding="utf-8") as system_file:
+                parts.append(system_file.read().strip())
+        else:
+            print(f"⚠️ Archivo de sistema no encontrado: {system_path}")
 
     if section_files:
         seen = set()
@@ -211,6 +263,14 @@ def detect_consultation_type_and_load_template(message):
         if template_path.exists():
             with open(template_path, "r", encoding="utf-8") as f:
                 return f"\n\n## TEMPLATE ESPECÍFICO PARA IDEAS CREATIVAS DE ALIMENTOS:\n\n{f.read()}"
+            
+    # Palabras clave para viajes con niños
+    travels_keywords = ["viajar", "viajes", "viaje", "destino", "destinos", "vacaciones", "niños", "familia"]
+    if any(keyword in message_lower for keyword in travels_keywords):
+        template_path = TEMPLATES_DIR / "travel_with_children.md"
+        if template_path.exists():
+            with open(template_path, "r", encoding="utf-8") as f:
+                return f"\n\n## TEMPLATE ESPECÍFICO PARA VIAJES CON NIÑOS:\n\n{f.read()}"
     
     # Palabras clave para destete y lactancia
     weaning_keywords = ["destete", "reducir tomas", "dejar pecho", "tomas nocturnas", "descansar mejor", 
@@ -330,9 +390,9 @@ async def get_user_profiles_and_babies(user_id, supabase_client, baby_id=None, b
 
     return context.strip(), routines_context.strip()
 
-async def get_conversation_history(user_id, supabase_client, limit_per_role=7, baby_id=None, filter_by_baby=False):
+async def get_conversation_history(user_id, supabase_client, limit_per_role=4, baby_id=None, filter_by_baby=False):
     """
-        Recupera los últimos mensajes 5 del usuario y del asistente para mantener contexto en la conversación.
+        Recupera los últimos mensajes 4 del usuario y del asistente para mantener contexto en la conversación.
         Filtrandor por el baby_id
     """
     user_query = supabase_client.table("conversations") \
@@ -511,6 +571,13 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
 
     message_text = payload.message.strip()
     simple_greeting = is_simple_greeting(message_text)
+    message_lower = payload.message.lower()
+
+    diaper_tokens = [
+        "pañal", "panal", "cambio de pañal", "cambiarle el pañal",
+        "cambiar pañal", "cambiar el pañal", "diaper", "fralda"
+    ]
+    is_diaper_context = any(token in message_lower for token in diaper_tokens)
 
     # Contexto RAG, perfiles/bebés e historial de conversación
     rag_context = ""
@@ -520,11 +587,14 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
     if not simple_greeting:
         rag_context = await get_rag_context(payload.message)
         
-        message_lower = payload.message.lower()
         needs_night_weaning = any(keyword in message_lower for keyword in NIGHT_WEANING_KEYWORDS)
         needs_partner = any(keyword in message_lower for keyword in PARTNER_KEYWORDS)
         needs_behavior = any(keyword in message_lower for keyword in BEHAVIOR_KEYWORDS)
         needs_routine = any(keyword in message_lower for keyword in ROUTINE_KEYWORDS)
+
+        if is_diaper_context:
+            needs_partner = False
+            needs_routine = False
 
         if needs_night_weaning:
             specialized_rag = await get_rag_context("desmame nocturno etapas Lorena Furtado destete respetuoso")
@@ -537,7 +607,7 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
             print("🎵 Búsqueda RAG especializada para vocalizaciones y comportamientos")
 
     # Construir lista de secciones adicionales del prompt
-    prompt_sections = ["style_manifest.md"]
+    prompt_sections = []
     if not simple_greeting:
         if needs_behavior:
             prompt_sections.append("behavior.md")
@@ -588,6 +658,8 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
 
     examples_block = ""
     matched_examples = []
+    instruction_dataset = load_instruction_dataset()
+
     if not simple_greeting:
         matched_examples = detect_examples(payload.message)
         if matched_examples:
@@ -595,13 +667,17 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
             if examples_block:
                 system_prompt_template += "\n\n" + examples_block
                 print(f"🧩 Ejemplos activados: {matched_examples}")
+
+    # Siempre agregar dataset general de instrucciones Lumi (v1)
+    if instruction_dataset:
+        system_prompt_template += "\n\n" + instruction_dataset
+        print("📚 Dataset lumi_instruction_dataset_v1.md cargado correctamente")
     
-    # Preparar contextos para el template (con optimización de longitud)
-    # Limitar el contexto RAG si es muy largo para evitar timeouts
-    max_rag_length = 3000
+    # Cantida de caracteres que se le pasara del rag al promp, de conocimiento
+    max_rag_length = 5000
     if len(combined_rag_context) > max_rag_length:
         combined_rag_context = combined_rag_context[:max_rag_length] + "...\n[Contexto truncado por longitud]"
-        print(f"⚠️ Contexto RAG truncado por longitud")
+        # print(f"⚠️ Contexto RAG truncado por longitud")
     
     formatted_system_prompt = system_prompt_template.format(
         today=today,
@@ -686,7 +762,7 @@ async def chat_openai(payload: ChatRequest, user=Depends(get_current_user)):
 
     # PRIMERA PRIORIDAD: Detectar rutinas en el mensaje del usuario
     try:
-        print(f"� Analizando mensaje para rutinas: {payload.message}")
+        #print(f"� Analizando mensaje para rutinas: {payload.message}")
         
         # Usar el mismo contexto de bebés
         babies = supabase.table("babies").select("*").eq("user_id", user_id).execute()

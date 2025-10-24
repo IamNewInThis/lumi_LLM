@@ -65,7 +65,9 @@ class KnowledgeDetector:
                 "escolinha", "guarderia", "jardin", "colegio", "escuela", "kindergarten",
                 "no va a la escuela", "deja de ir", "está en casa", "lo cuidan", "cuidadora", "niñera",
                 "vive con", "clima", "temperatura", "trabajo de la madre", "trabajo del padre",
-                "vacaciones", "mudamos", "no vamos", "se queda en casa"
+                "vacaciones", "mudamos", "no vamos", "se queda en casa",
+                "pañal", "panal", "diaper", "fralda", "cambiar pañal", "cambio de pañal",
+                "no me deja cambiar", "no se deja cambiar", "resiste el pañal"
             ]
         }
     }

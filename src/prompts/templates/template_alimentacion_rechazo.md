@@ -1,79 +1,74 @@
 # Template: Rechazo de Alimentos en Preescolares
 
-## Estructura de Respuesta para Casos de "No quiere comer X alimento"
+## 1. Propósito
+Ayudar a la familia a acompañar el rechazo alimentario de manera respetuosa, integrando desarrollo, vínculo y estrategias prácticas.  
+El foco es **mantener la calma, ofrecer variedad y evitar luchas**.
 
-### 1. Validación Inmediata
-"Lo que está pasando con [nombre] es muy típico y totalmente normal para su edad. A los [edad], muchos niños atraviesan una etapa de **selección alimentaria** (también conocida como "picky eating") aunque antes comieran variado. Es parte de su desarrollo y de la construcción de su **autonomía y preferencias**."
+---
 
-### 2. Clave Principal
-"La clave es **no forzarlo**, pero sí seguir ofreciendo con calma, confianza y estrategias respetuosas."
+## 2. Estructura sugerida de respuesta
 
-### 3. Explicación del Desarrollo
-#### 🍽️ ¿Por qué ahora dice que no le gustan?
+### 🧩 A. Comprender
+**Validación breve + marco evolutivo**
+> “Lo que pasa con [nombre] es común a esta edad. Muchos niños, alrededor de los [edad], atraviesan una etapa de selección alimentaria (‘picky eating’) como parte del desarrollo de su autonomía.”
 
-* A los [edad], **descubrir que puede decir "no"** le da poder y sentido de identidad.
-* Su paladar está en evolución: **algunos sabores fuertes o texturas nuevas pueden generarle rechazo real**, no solo "capricho".
-* Si hay otros cambios en casa, puede **usar la comida como un terreno donde siente control**.
+Puntos clave:
+- Descubre que puede decir “no” → identidad y control.  
+- El paladar cambia; puede haber rechazo real a ciertas texturas o sabores.  
+- A veces la comida se vuelve un espacio donde siente poder.  
 
-**Mensaje de tranquilidad**: "Nada de esto significa que haya que rendirse. Al contrario: **es una etapa a atravesar con paciencia**, sin convertir la comida en lucha."
+👉 Tranquiliza a la familia: es una **etapa transitoria**.
 
-### 4. Estrategias Estructuradas
+---
 
-#### ✅ ¿Qué puedes hacer?
+### 🧠 B. Orientar
+**Estrategias prácticas sin presión**
 
-##### 1. 🍅 Seguir ofreciendo, sin presión
-* Mantén [alimento] en la mesa como parte normal de la comida, **aunque no las coma**.
-* No le digas "prueba aunque sea un poquito". Solo ponlas ahí.
+1. **Seguir ofreciendo con calma**  
+   - Incluye [alimento] en la mesa, sin obligar ni insistir.  
+   - Evita frases como “solo una cucharada”.  
+   - Recuerda: ver un alimento entre **10–20 veces sin presión** facilita la aceptación.
 
-📌 *Los estudios muestran que un niño necesita ver un alimento entre 10 y 20 veces sin presión antes de aceptarlo de nuevo.*
+2. **Explorar a través del juego y la participación**  
+   - Jugar con [alimentos] de juguete, plastilina o dibujos.  
+   - Incluirlo en la preparación real (lavar, mezclar, cortar con cuchillo seguro).  
+   - Frase útil: *“¿Quieres ser el chef de la sopa mágica hoy?”*
 
-##### 2. 🖌️ Usar el juego simbólico y el contacto no alimenticio
-* **Jugar con [alimentos] de juguete, plastilina o dibujo.**
-* **Incluirlo en la preparación real:** lavar, mezclar ingredientes, cortar con cuchillo seguro.
+3. **Variar presentación sin ocultar**  
+   - Cambia forma o textura: [variaciones de preparación].  
+   - Usa [preparaciones atractivas], pero sin “esconder” el alimento.
 
-💬 Frase útil:
-> *"¿Te gustaría ser el chef que revuelve la sopa mágica hoy?"*
+4. **Validar su decisión sin drama**  
+   > *“Hoy no quieres esto. Está bien. Lo dejamos en el plato. Quizás otro día te guste.”*
 
-##### 3. [Alimento específico] Presentarlas de otra forma (sin esconderlas)
-* A veces no es el sabor, sino la forma: [variaciones de preparación específicas]
-* Puedes hacer [preparaciones atractivas], pero sin engaños.
+5. **Modelar disfrute en familia**  
+   - Comer [alimento] con gusto frente a él.  
+   > *“Mmm… esta [alimento] está [característica positiva].”*
 
-##### 4. 👦 Validar su gusto sin drama
-> *"Hoy no quieres esto. Está bien. Lo dejamos en el plato. Tal vez otro día te guste."*
+---
 
-Esto **baja la presión emocional** y mantiene la puerta abierta a futuros intentos.
+### 🚫 C. Evitar
+- Chantajes, premios o castigos.  
+- Esconder alimentos constantemente.  
+- Etiquetas: *“tú no comes [alimento]”*.  
 
-##### 5. 👨‍👩‍👧 Comer en familia y modelar
-* Que te vea a ti **comer [alimento] con gusto** es más poderoso que cualquier sermón.
-> *"Mmm… esta [alimento] está [característica positiva]. Me encanta."*
+---
 
-### 5. Qué Evitar
+### 💬 D. Sostener
+Cierra con una idea de continuidad:
+> “Su trabajo es decidir si come y cuánto; el tuyo es ofrecer con amor, variedad y estructura.”  
+(*Inspirado en el modelo de Ellyn Satter.*)
 
-#### 🙅🏻‍♀️ Evitar (aunque sea tentador)
-* Chantajes: *"si comes [alimento], te doy postre"*
-* Premios o castigos por lo que come.
-* Esconder todo en purés para que "no se dé cuenta" (no genera aceptación real).
-* Etiquetas: *"tú no comes [alimento]"* → se vuelve parte de su identidad.
+Ofrece apoyo adicional:
+- “¿Quieres que pensemos juntos ideas creativas para volver a presentar [alimento]?”  
+- “¿Prefieres una mini rutina de cocina compartida?”
 
-### 6. Recordatorio Clave
+---
 
-#### 💡 Recuerda esto:
-> **Su trabajo es decidir si come y cuánto. Tu trabajo es ofrecer con amor, variedad y estructura.**
-> (Según el modelo de Ellyn Satter, ampliamente recomendado en crianza respetuosa)
-
-### 7. Cierre con Opciones
-
-Si quieres, puedo ayudarte a:
-* Diseñar una **mini rutina de cocina compartida con él** (súper poderosa para volver a aceptar alimentos).
-* Armar **ideas concretas de presentación de [alimento]** por colores, texturas o juegos.
-* Pensar una frase o cuento que te ayude a hablar del tema sin presión.
-
-¿Quieres ir por alguno de esos caminos? ¿Qué [alimentos] solía comer antes y cuáles está rechazando ahora?
-
-## Variables para Personalizar:
-- [nombre]: Nombre del niño
-- [edad]: Edad específica
-- [alimento]: Verduras, frutas, proteínas, etc.
-- [variaciones de preparación]: Específicas al alimento mencionado
-- [preparaciones atractivas]: Ideas creativas para ese alimento específico
-- [característica positiva]: Crujiente, dulce, suave, etc.
+## 3. Variables para personalizar
+- `[nombre]`: nombre del niño  
+- `[edad]`: edad específica  
+- `[alimento]`: verduras, frutas, proteínas, etc.  
+- `[variaciones de preparación]`: modos alternativos de presentación  
+- `[preparaciones atractivas]`: ejemplos visuales o sensoriales  
+- `[característica positiva]`: crujiente, suave, dulce, etc.
