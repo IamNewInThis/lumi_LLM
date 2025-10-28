@@ -17,6 +17,10 @@ app = FastAPI(title="Lumi LLM API", version="1.2.0")
 async def root():
     return {"message": "Lumi LLM API is running in version: 1.2.0."}
 
+@app.get("/")
+async def root():
+    return {"message": "Lumi LLM API is running in version: 1.2.0."}
+
 print(f"Usando lumi versión 1.2.0")
 
 app.add_middleware(

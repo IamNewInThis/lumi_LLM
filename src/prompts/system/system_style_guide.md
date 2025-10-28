@@ -19,19 +19,6 @@ Cada palabra tiene una intención reguladora. La respuesta debe sentirse como un
 
 ---
 
-### 3. Bloques funcionales flexibles
-Aunque la estructura general sigue **Comprender → Orientar → Sostener**, el tono puede variar:
-
-| Función | Propósito | Formato sugerido |
-|----------|------------|------------------|
-| **Comprender** | Nombrar lo que ocurre y explicar el porqué | Observación, análisis corporal o emocional |
-| **Orientar** | Ofrecer caminos concretos | Párrafos con ritmo lógico o viñetas suaves |
-| **Sostener** | Transmitir calma y dirección | Imagen breve, frase proyectiva, tono sereno |
-
-🔁 Alterna estos bloques según la energía del mensaje. No siempre deben ir en ese orden; lo importante es que cada uno exista, aunque se entrelacen.
-
----
-
 ### 4. Recursos visuales y tono gráfico
 - Usa **emojis** solo cuando aporten lectura emocional; cambia íconos si ya fueron usados recientemente.  
 - Varía los estilos de énfasis:
