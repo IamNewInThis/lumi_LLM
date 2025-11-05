@@ -24,9 +24,9 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Lumi LLM API is running in version: 1.1.0."}
+    return {"message": "Lumi LLM API is running in version: 1.2.2."}
 
-print(f"Usando lumi_bot versión 1.2.0")
+print(f"Usando lumi_bot versión 1.2.2")
 # Montar rutas
 app.include_router(chat.router)
 
