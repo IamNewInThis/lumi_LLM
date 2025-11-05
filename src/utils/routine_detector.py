@@ -18,7 +18,7 @@ class RoutineDetector:
             # Español
             "rutina", "horario", "cronograma", "agenda",
             "despertar", "desayuno", "almuerzo", "cena", "siesta",
-            "dormir", "sueño", "baño", "leche", "comida",
+            "baño", "leche", "comida",
             "jardín", "colegio", "actividades", "estudio", "estudiar",
             "tareas", "deberes", "matemáticas", "lectura", "escritura",
             "ciencias", "arte", "lunes", "miércoles", "viernes",
@@ -34,7 +34,7 @@ class RoutineDetector:
             # Portugués
             "rotina", "horário", "horario", "cronograma", "agenda",
             "acordar", "despertar", "café da manhã", "cafe da manha", "almoco", "almoço", "jantar", "soneca",
-            "dormir", "sono", "banho", "leite", "comida",
+            "sono", "banho", "leite", "comida",
             "escola", "creche", "atividades", "atividades", "estudo", "estudar",
             "tarefas", "deveres", "matemática", "matematica", "leitura", "escrita",
             "ciências", "ciencias", "arte", "segunda", "quarta", "sexta",
@@ -58,22 +58,38 @@ class RoutineDetector:
         print(f"🔍 Mensaje: '{message}'")
         print(f"🔍 Keywords encontradas: {[k for k in routine_keywords if k in message_lower]}")
         print(f"🔍 Tiene keywords de rutina: {has_routine_keywords}")
+        print(f"👥 Bebés disponibles: {[b.get('name', 'Sin nombre') for b in babies_context]}")
         
         if not has_routine_keywords:
             print("❌ No hay keywords de rutina, saltando detección")
             return None
             
-        # Si hay contexto de bebés, usar el primero como referencia
-        baby_context = babies_context[0] if babies_context else {}
-        baby_name = baby_context.get("name", "el bebé")
+        # Detectar de qué bebé se está hablando basándose en nombres mencionados
+        baby_context = None
+        baby_name = "el bebé"
+        baby_age_months = 0
+        
+        # Buscar nombres de bebés mencionados en el mensaje
+        for baby in babies_context:
+            baby_name_in_db = baby.get("name", "").lower().strip()
+            if baby_name_in_db and baby_name_in_db in message_lower:
+                baby_context = baby
+                baby_name = baby["name"].strip()  # También limpiar espacios del nombre final
+                print(f"👶 Bebé detectado por nombre en mensaje: '{baby_name}'")
+                break
+        
+        # Si no se encuentra nombre específico, usar el primero como fallback
+        if not baby_context and babies_context:
+            baby_context = babies_context[0]
+            baby_name = baby_context.get("name", "el bebé").strip()  # Limpiar espacios
+            print(f"👶 Usando bebé por defecto (no se encontró nombre específico): '{baby_name}'")
         
         # Calcular edad correctamente desde birthdate
-        baby_age_months = 0
-        if baby_context.get("birthdate"):
+        if baby_context and baby_context.get("birthdate"):
             from src.utils.date_utils import calcular_meses
             baby_age_months = calcular_meses(baby_context["birthdate"])
         
-        print(f"👶 Bebé detectado: {baby_name} ({baby_age_months} meses)")
+        print(f"👶 Bebé detectado para rutina: {baby_name} ({baby_age_months} meses)")
         
         prompt = f"""
 Analiza este mensaje del usuario sobre rutinas para su bebé:
@@ -181,6 +197,14 @@ Si NO hay información clara de rutina, responde: {{"has_routine_info": false}}
                 content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
                 
                 print(f"🤖 Contenido recibido: {content}")
+                
+                # Limpiar markers de código markdown si existen
+                if content.startswith("```json"):
+                    content = content.replace("```json", "").replace("```", "").strip()
+                elif content.startswith("```"):
+                    content = content.replace("```", "").strip()
+                
+                print(f"🤖 Contenido limpio para JSON: {content[:200]}...")
                 
                 # Parsear respuesta JSON
                 try:

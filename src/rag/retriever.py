@@ -29,6 +29,6 @@ vs = SupabaseVectorStore(
     embedding=emb,
 )
 
-retriever = vs.as_retriever(search_kwargs={"k": 8})   
+retriever = vs.as_retriever(search_kwargs={"k": 8})  
 
 

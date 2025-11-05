@@ -1,3 +1,4 @@
+# src/services/knowledge_service.py
 from typing import Dict, List, Optional
 from ..rag.retriever import supabase
 
@@ -194,7 +195,8 @@ class BabyKnowledgeService:
                 "comportamiento": "😊",
                 "salud": "🏥",
                 "rutinas": "⏰",
-                "desarrollo": "📈"
+                "desarrollo": "📈",
+                "general": "🏠"
             }
             
             for category, items in by_category.items():
@@ -210,6 +212,54 @@ class BabyKnowledgeService:
             context_parts.append("\n".join(baby_context))
         
         return "\n".join(context_parts)
+
+    @staticmethod
+    async def save_or_update_general_knowledge(user_id: str, baby_id: str, knowledge_data: Dict) -> Optional[Dict]:
+        """
+        Guarda o actualiza conocimiento de categoría GENERAL sin pedir confirmación.
+        Se identifica por título dentro del baby_id.
+        """
+        try:
+            # Verificar que el bebé pertenece al usuario
+            baby_check = supabase.table("babies")\
+                .select("id")\
+                .eq("id", baby_id)\
+                .eq("user_id", user_id)\
+                .execute()
+            
+            if not baby_check.data:
+                raise ValueError("El bebé no pertenece al usuario")
+
+            existing = supabase.table("baby_knowledge")\
+                .select("id")\
+                .eq("user_id", user_id)\
+                .eq("baby_id", baby_id)\
+                .eq("category", knowledge_data["category"])\
+                .eq("title", knowledge_data["title"])\
+                .limit(1)\
+                .execute()
+
+            if existing.data:
+                knowledge_id = existing.data[0]["id"]
+                update_data = {
+                    "description": knowledge_data["description"],
+                    "importance_level": knowledge_data.get("importance_level", 2),
+                    "subcategory": knowledge_data.get("subcategory")
+                }
+
+                result = supabase.table("baby_knowledge")\
+                    .update(update_data)\
+                    .eq("id", knowledge_id)\
+                    .execute()
+
+                return result.data[0] if result.data else None
+
+            # Si no existe, guardar como nuevo
+            return await BabyKnowledgeService.save_knowledge(user_id, baby_id, knowledge_data)
+
+        except Exception as e:
+            print(f"Error guardando/actualizando conocimiento general: {e}")
+            return None
 
     @staticmethod
     async def find_baby_by_name(user_id: str, baby_name: str) -> Optional[str]:

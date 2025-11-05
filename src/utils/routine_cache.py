@@ -54,7 +54,6 @@ class RoutineConfirmationCache:
             del self._pending_confirmations[user_id]
             print(f"🗑️ Confirmación de rutina eliminada para usuario: {user_id}")
     
-    # TODO Agregar confirmaciones en portuges/ingles 
     def is_confirmation_response(self, message: str) -> Optional[bool]:
         """
         Detecta si un mensaje es una respuesta de confirmación
@@ -64,18 +63,22 @@ class RoutineConfirmationCache:
         
         # Respuestas afirmativas
         positive_responses = [
-            "sí", "si", "yes", "ok", "vale", "perfecto", "correcto",
-            "está bien", "esta bien", "acepto", "confirmo", "claro",
-            "por supuesto", "guardalo", "guárdalo", "guardala", "guárdala",
+            "sí", "si", "sim", "yes", "ok", "vale", "perfecto", "perfeito",
+            "correcto", "está bien", "esta bien", "está bom", "esta bom",
+            "acepto", "aceito", "confirmo", "claro", "por supuesto", "com certeza",
+            "guardalo", "guárdalo", "guardala", "guárdala", "pode ser",
+            "tudo bem", "sure", "yup", "yep", "alright", "please do",
             "👍", "✅", "dale", "bueno",
-            "claro que sí", "hazlo", "hazlo por favor", "por favor"
+            "claro que sí", "claro que sim", "hazlo", "hazlo por favor", "por favor"
         ]
         
         # Respuestas negativas
         negative_responses = [
             "no", "nope", "cancel", "cancelar", "no gracias",
             "no está bien", "no esta bien", "incorrecto", "no me parece",
-            "👎", "❌", "rechazar", "no quiero", "mejor no"
+            "👎", "❌", "rechazar", "no quiero", "mejor no",
+            "não", "nao", "melhor não", "prefiro que não", "negativo",
+            "don't", "do not", "better not"
         ]
         
         # Verificar respuestas exactas
